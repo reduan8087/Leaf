@@ -18,9 +18,10 @@ TestResults/
 *.nupkg
 packages/
 
-# Claude Code local state
-.claude/settings.local.json
+# Local assistant configuration (kept out of the repository)
+CLAUDE.md
 CLAUDE.local.md
+.claude/
 
 # Perf / traces
 *.etl

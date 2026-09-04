@@ -52,7 +52,7 @@ v0.1.0 crashed 10–30 s after a resize or on scroll with 0xC000027B / RO_E_CLOS
 right after `SoftwareBitmapSource.SetBitmapAsync`, but XAML keeps a reference and re-reads it when it re-creates image surfaces.
 Fix: render into a pooled buffer, copy into a `WriteableBitmap` on the UI thread, never dispose; the cache returns retired entries
 and the viewer unbinds them from Images first (`Retire`). Memory pressure is reported to the GC so native pixel memory is collected.
-Rule (CLAUDE.md, winui3-dev skill): never Dispose a WinRT bitmap an Image may still reference.
+Rule (project conventions): never Dispose a WinRT bitmap an Image may still reference.
 
 ## 2026-09-04 — v0.1.2: icon design "B · Document"
 User chose design B from three directions (A emblem tile, B green page with folded corner, C gradient monogram). File icon
