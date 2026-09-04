@@ -30,6 +30,7 @@ public sealed partial class PdfPageView : Grid
     private readonly XamlPath _currentHit = new() { IsHitTestVisible = false, Fill = CurrentHitBrush };
     private readonly XamlPath _selection = new() { IsHitTestVisible = false, Fill = SelectionBrush };
     private readonly Dictionary<TileKey, Image> _tileImages = new();
+    private readonly List<TileKey> _staleKeys = new();
     private readonly Stack<Image> _imagePool = new();
 
     public PdfPageView()
@@ -50,6 +51,9 @@ public sealed partial class PdfPageView : Grid
 
     public bool HasTiles => _tileImages.Count > 0;
 
+    /// <summary>Cache keys of tiles kept on screen from a previous scale; they must stay pinned in the cache until cleared.</summary>
+    public IReadOnlyList<TileKey> StaleKeys => _staleKeys;
+
     public void Bind(int pageIndex)
     {
         PageIndex = pageIndex;
@@ -59,7 +63,7 @@ public sealed partial class PdfPageView : Grid
     {
         PageIndex = -1;
         ClearTiles();
-        _staleTiles.Children.Clear();
+        ClearStaleTiles();
         _placeholder.Source = null;
         _highlights.Data = null;
         _currentHit.Data = null;
@@ -81,15 +85,17 @@ public sealed partial class PdfPageView : Grid
             return;
         }
 
-        _staleTiles.Children.Clear();
-        foreach (Image img in _tileImages.Values)
+        ClearStaleTiles();
+        foreach (KeyValuePair<TileKey, Image> kv in _tileImages)
         {
+            Image img = kv.Value;
             _tiles.Children.Remove(img);
             img.Width *= ratio;
             img.Height *= ratio;
             Canvas.SetLeft(img, Canvas.GetLeft(img) * ratio);
             Canvas.SetTop(img, Canvas.GetTop(img) * ratio);
             _staleTiles.Children.Add(img);
+            _staleKeys.Add(kv.Key);
         }
 
         _tileImages.Clear();
@@ -107,6 +113,7 @@ public sealed partial class PdfPageView : Grid
         }
 
         _staleTiles.Children.Clear();
+        _staleKeys.Clear();
     }
 
     /// <summary>Shows exactly the given tiles; anything else currently shown is removed.</summary>

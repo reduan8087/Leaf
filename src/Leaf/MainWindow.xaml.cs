@@ -1,3 +1,6 @@
+using Leaf.Dialogs;
+using Leaf.Pdfium;
+using Leaf.Viewer;
 using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
@@ -23,6 +26,13 @@ public sealed partial class MainWindow : Window
         SystemBackdrop = new MicaBackdrop();
         SetUpTitleBar();
         WireInput();
+        Closed += (_, _) =>
+        {
+            foreach (TabViewItem item in Tabs.TabItems.OfType<TabViewItem>().ToList())
+            {
+                (item.Tag as DocumentTab)?.Viewer.Dispose();
+            }
+        };
     }
 
     private void SetUpTitleBar()
@@ -60,27 +70,71 @@ public sealed partial class MainWindow : Window
 
     // ----- Public API used by App -----
 
-    public void OpenFile(string path)
+    public void OpenFile(string path) => _ = OpenFileAsync(path);
+
+    public async Task OpenFileAsync(string path)
     {
         foreach (TabViewItem item in Tabs.TabItems.OfType<TabViewItem>())
         {
-            if (item.Tag is string existing && string.Equals(existing, path, StringComparison.OrdinalIgnoreCase))
+            if (item.Tag is DocumentTab existing && string.Equals(existing.Path, path, StringComparison.OrdinalIgnoreCase))
             {
                 Tabs.SelectedItem = item;
                 return;
             }
         }
 
+        var viewer = new ViewerControl();
+        var docTab = new DocumentTab(path, viewer);
         var tab = new TabViewItem
         {
             Header = Path.GetFileName(path),
-            Tag = path,
+            Tag = docTab,
             IconSource = new SymbolIconSource { Symbol = Symbol.Document },
-            Content = new TextBlock { Text = path, Margin = new Thickness(24), TextWrapping = TextWrapping.Wrap },
         };
         ToolTipService.SetToolTip(tab, path);
         Tabs.TabItems.Add(tab);
         Tabs.SelectedItem = tab;
+        viewer.StateChanged += _ => UpdateTitle();
+
+        string? password = null;
+        while (true)
+        {
+            try
+            {
+                DocumentSession session = await DocumentSession.OpenAsync(path, password);
+                if (!Tabs.TabItems.Contains(tab))
+                {
+                    session.Dispose(); // tab was closed while loading
+                    return;
+                }
+
+                await viewer.LoadAsync(session);
+                UpdateTitle();
+                _ = TestAutomation.RunIfRequestedAsync(viewer);
+                return;
+            }
+            catch (PdfException ex) when (ex.Error == PdfError.Password)
+            {
+                password = await PasswordDialog.ShowAsync(Content.XamlRoot, Path.GetFileName(path), previousAttemptFailed: password is not null);
+                if (password is null)
+                {
+                    CloseTab(tab);
+                    return;
+                }
+            }
+            catch (PdfException ex)
+            {
+                CloseTab(tab);
+                ShowError($"Can't open {Path.GetFileName(path)}", ex.Message);
+                return;
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                CloseTab(tab);
+                ShowError($"Can't open {Path.GetFileName(path)}", ex.Message);
+                return;
+            }
+        }
     }
 
     public void BringToFront()
@@ -141,17 +195,31 @@ public sealed partial class MainWindow : Window
 
     private void OnTabSelectionChanged(object sender, SelectionChangedEventArgs e)
     {
-        if (Tabs.SelectedItem is TabViewItem { Header: string name } tab)
+        if (Tabs.SelectedItem is TabViewItem { Tag: DocumentTab doc })
         {
-            Title = $"{name} - Leaf";
-            TabContent.Content = tab.Content;
+            TabContent.Content = doc.Viewer;
             WelcomePanel.Visibility = Visibility.Collapsed;
+            doc.Viewer.Focus(FocusState.Programmatic);
+        }
+        else
+        {
+            TabContent.Content = null;
+            WelcomePanel.Visibility = Visibility.Visible;
+        }
+
+        UpdateTitle();
+    }
+
+    private void UpdateTitle()
+    {
+        if (Tabs.SelectedItem is TabViewItem { Tag: DocumentTab doc })
+        {
+            int pages = doc.Viewer.PageCount;
+            Title = pages > 0 ? $"{Path.GetFileName(doc.Path)} ({doc.Viewer.CurrentPage + 1}/{pages}) - Leaf" : $"{Path.GetFileName(doc.Path)} - Leaf";
         }
         else
         {
             Title = "Leaf";
-            TabContent.Content = null;
-            WelcomePanel.Visibility = Visibility.Visible;
         }
     }
 
@@ -165,9 +233,17 @@ public sealed partial class MainWindow : Window
 
     private void CloseTab(TabViewItem tab)
     {
-        object? content = tab.Content;
+        var doc = tab.Tag as DocumentTab;
         Tabs.TabItems.Remove(tab);
-        (content as IDisposable)?.Dispose();
+        if (doc is not null)
+        {
+            if (ReferenceEquals(TabContent.Content, doc.Viewer))
+            {
+                TabContent.Content = null;
+            }
+
+            doc.Viewer.Dispose();
+        }
     }
 
     private void CycleTab(int delta)
@@ -180,4 +256,6 @@ public sealed partial class MainWindow : Window
 
         Tabs.SelectedIndex = (Tabs.SelectedIndex + delta + count) % count;
     }
+
+    private sealed record DocumentTab(string Path, ViewerControl Viewer);
 }

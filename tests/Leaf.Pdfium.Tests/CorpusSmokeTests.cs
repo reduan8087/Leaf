@@ -35,7 +35,7 @@ public sealed class CorpusSmokeTests
             .ToArray();
 
         var report = new List<string>();
-        int ok = 0, password = 0, failed = 0;
+        int ok = 0, password = 0, invalid = 0, failed = 0;
         long totalMs = 0;
         var sw = new Stopwatch();
         foreach (string file in files)
@@ -58,10 +58,15 @@ public sealed class CorpusSmokeTests
             {
                 password++;
             }
+            catch (PdfException ex) when (ex.Error is PdfError.Format or PdfError.File)
+            {
+                invalid++; // not a PDF or damaged: a clean error is the expected outcome
+                report.Add($"{file}\tinvalid: {ex.Message}");
+            }
             catch (Exception ex)
             {
                 failed++;
-                report.Add($"{file}\t{ex.GetType().Name}: {ex.Message}");
+                report.Add($"{file}\tFAILED {ex.GetType().Name}: {ex.Message}");
             }
 
             totalMs += sw.ElapsedMilliseconds;
@@ -71,12 +76,12 @@ public sealed class CorpusSmokeTests
             }
         }
 
-        string summary = $"corpus: {files.Length} files, {ok} ok, {password} password-protected, {failed} failed, {totalMs / Math.Max(1, files.Length)} ms avg";
+        string summary = $"corpus: {files.Length} files, {ok} ok, {password} password-protected, {invalid} invalid (clean error), {failed} unexpected failures, {totalMs / Math.Max(1, files.Length)} ms avg";
         _output.WriteLine(summary);
         string artifacts = Path.Combine(FindRepoRoot(), "artifacts");
         Directory.CreateDirectory(artifacts);
         File.WriteAllLines(Path.Combine(artifacts, "corpus-report.txt"), [summary, .. report]);
-        Assert.True(failed <= files.Length / 20, $"{failed} files failed to open (>5%) - see artifacts/corpus-report.txt");
+        Assert.True(failed == 0, $"{failed} files raised unexpected exceptions - see artifacts/corpus-report.txt");
     }
 
     private static string FindRepoRoot()

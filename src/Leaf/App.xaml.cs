@@ -24,6 +24,7 @@ public partial class App : Application
     {
         _window = new MainWindow();
         AppInstance.GetCurrent().Activated += OnRedirectedActivation;
+        Microsoft.UI.Xaml.Media.CompositionTarget.Rendering += OnFirstFrame;
         _window.Activate();
 
         foreach (string path in ActivationParser.ExtractPdfPaths(_launchArgs))
@@ -49,6 +50,12 @@ public partial class App : Application
                 _window.OpenFile(path);
             }
         });
+    }
+
+    private void OnFirstFrame(object? sender, object e)
+    {
+        Microsoft.UI.Xaml.Media.CompositionTarget.Rendering -= OnFirstFrame;
+        PerfLog.Stamp("first-frame");
     }
 
     private void OnUnhandledException(object sender, Microsoft.UI.Xaml.UnhandledExceptionEventArgs e)

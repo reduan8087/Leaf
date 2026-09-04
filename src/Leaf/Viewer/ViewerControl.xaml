@@ -1,0 +1,122 @@
+<?xml version="1.0" encoding="utf-8"?>
+<UserControl
+    x:Class="Leaf.Viewer.ViewerControl"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:local="using:Leaf.Viewer"
+    IsTabStop="True"
+    UseSystemFocusVisuals="False">
+
+    <UserControl.Resources>
+        <Style x:Key="ToolButton" TargetType="Button">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Padding" Value="8,6" />
+            <Setter Property="MinWidth" Value="36" />
+        </Style>
+        <Style x:Key="ToolToggle" TargetType="ToggleButton">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Padding" Value="8,6" />
+            <Setter Property="MinWidth" Value="36" />
+        </Style>
+    </UserControl.Resources>
+
+    <Grid x:Name="Root">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+        <!-- Toolbar -->
+        <Grid Grid.Row="0" Padding="8,4" Background="{ThemeResource LayerFillColorDefaultBrush}" BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}" BorderThickness="0,0,0,1">
+            <StackPanel Orientation="Horizontal" Spacing="2" HorizontalAlignment="Center">
+                <Button x:Name="PrevPageButton" Style="{StaticResource ToolButton}" Click="OnPrevPage" ToolTipService.ToolTip="Previous page (Page Up)">
+                    <FontIcon Glyph="&#xE70E;" FontSize="14" />
+                </Button>
+                <TextBox x:Name="PageBox" Width="64" TextAlignment="Center" VerticalAlignment="Center" KeyDown="OnPageBoxKeyDown" LostFocus="OnPageBoxLostFocus" ToolTipService.ToolTip="Go to page (Ctrl+G)" />
+                <TextBlock x:Name="PageCountText" VerticalAlignment="Center" Margin="6,0,6,0" Text="/ 0" Opacity="0.8" />
+                <Button x:Name="NextPageButton" Style="{StaticResource ToolButton}" Click="OnNextPage" ToolTipService.ToolTip="Next page (Page Down)">
+                    <FontIcon Glyph="&#xE70D;" FontSize="14" />
+                </Button>
+
+                <AppBarSeparator Margin="6,0" />
+
+                <Button Style="{StaticResource ToolButton}" Click="OnZoomOut" ToolTipService.ToolTip="Zoom out (Ctrl+-)">
+                    <FontIcon Glyph="&#xE71F;" FontSize="14" />
+                </Button>
+                <Button x:Name="ZoomButton" Style="{StaticResource ToolButton}" MinWidth="88" ToolTipService.ToolTip="Zoom">
+                    <TextBlock x:Name="ZoomText" Text="100%" />
+                    <Button.Flyout>
+                        <MenuFlyout>
+                            <MenuFlyoutItem Text="Fit width" Click="OnFitWidth" />
+                            <MenuFlyoutItem Text="Fit page" Click="OnFitPage" />
+                            <MenuFlyoutSeparator />
+                            <MenuFlyoutItem Text="50%" Tag="0.5" Click="OnZoomPreset" />
+                            <MenuFlyoutItem Text="75%" Tag="0.75" Click="OnZoomPreset" />
+                            <MenuFlyoutItem Text="100%" Tag="1" Click="OnZoomPreset" />
+                            <MenuFlyoutItem Text="125%" Tag="1.25" Click="OnZoomPreset" />
+                            <MenuFlyoutItem Text="150%" Tag="1.5" Click="OnZoomPreset" />
+                            <MenuFlyoutItem Text="200%" Tag="2" Click="OnZoomPreset" />
+                            <MenuFlyoutItem Text="300%" Tag="3" Click="OnZoomPreset" />
+                            <MenuFlyoutItem Text="400%" Tag="4" Click="OnZoomPreset" />
+                        </MenuFlyout>
+                    </Button.Flyout>
+                </Button>
+                <Button Style="{StaticResource ToolButton}" Click="OnZoomIn" ToolTipService.ToolTip="Zoom in (Ctrl++)">
+                    <FontIcon Glyph="&#xE8A3;" FontSize="14" />
+                </Button>
+
+                <AppBarSeparator Margin="6,0" />
+
+                <Button Style="{StaticResource ToolButton}" Click="OnRotateLeft" ToolTipService.ToolTip="Rotate left (Ctrl+Shift+L)">
+                    <FontIcon Glyph="&#xE7A7;" FontSize="14" />
+                </Button>
+                <Button Style="{StaticResource ToolButton}" Click="OnRotateRight" ToolTipService.ToolTip="Rotate right (Ctrl+Shift+R)">
+                    <FontIcon Glyph="&#xE7AD;" FontSize="14" />
+                </Button>
+
+                <AppBarSeparator Margin="6,0" />
+
+                <Button Style="{StaticResource ToolButton}" Click="OnFindButton" ToolTipService.ToolTip="Find (Ctrl+F)">
+                    <FontIcon Glyph="&#xE721;" FontSize="14" />
+                </Button>
+            </StackPanel>
+        </Grid>
+
+        <!-- Document -->
+        <ScrollViewer x:Name="Scroller" Grid.Row="1"
+                      ZoomMode="Disabled"
+                      HorizontalScrollBarVisibility="Auto" HorizontalScrollMode="Auto"
+                      VerticalScrollBarVisibility="Auto" VerticalScrollMode="Auto"
+                      IsScrollInertiaEnabled="True"
+                      Background="{ThemeResource SolidBackgroundFillColorSecondaryBrush}"
+                      ViewChanged="OnViewChanged" SizeChanged="OnScrollerSizeChanged">
+            <local:PageHostPanel x:Name="PageHost" />
+        </ScrollViewer>
+
+        <!-- Find bar -->
+        <Border x:Name="FindBar" Grid.Row="1" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,8,24,0"
+                Visibility="Collapsed" Padding="8,6" CornerRadius="6"
+                Background="{ThemeResource AcrylicBackgroundFillColorDefaultBrush}"
+                BorderBrush="{ThemeResource SurfaceStrokeColorDefaultBrush}" BorderThickness="1">
+            <StackPanel Orientation="Horizontal" Spacing="4">
+                <TextBox x:Name="FindBox" Width="240" PlaceholderText="Find in document" TextChanged="OnFindTextChanged" KeyDown="OnFindBoxKeyDown" />
+                <TextBlock x:Name="FindStatus" VerticalAlignment="Center" MinWidth="70" Margin="6,0" Opacity="0.8" />
+                <Button Style="{StaticResource ToolButton}" Click="OnFindPrev" ToolTipService.ToolTip="Previous (Shift+F3)">
+                    <FontIcon Glyph="&#xE70E;" FontSize="12" />
+                </Button>
+                <Button Style="{StaticResource ToolButton}" Click="OnFindNext" ToolTipService.ToolTip="Next (F3)">
+                    <FontIcon Glyph="&#xE70D;" FontSize="12" />
+                </Button>
+                <ToggleButton x:Name="MatchCaseToggle" Style="{StaticResource ToolToggle}" Content="Aa" Click="OnMatchCaseToggled" ToolTipService.ToolTip="Match case" />
+                <Button Style="{StaticResource ToolButton}" Click="OnFindClose" ToolTipService.ToolTip="Close (Esc)">
+                    <FontIcon Glyph="&#xE711;" FontSize="12" />
+                </Button>
+            </StackPanel>
+        </Border>
+
+        <ProgressRing x:Name="Busy" Grid.Row="1" IsActive="False" Width="40" Height="40" />
+        <InfoBar x:Name="ViewerNotice" Grid.Row="1" VerticalAlignment="Bottom" Margin="12" IsOpen="False" />
+    </Grid>
+</UserControl>

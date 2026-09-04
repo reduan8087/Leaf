@@ -17,7 +17,7 @@ public sealed class RenderScheduler
     private readonly DocumentSession _session;
     private readonly DispatcherQueue _dispatcher;
     private readonly TileCache _cache;
-    private readonly HashSet<TileKey> _inFlight = new();
+    private readonly Dictionary<TileKey, TileRequest> _inFlight = new();
     private CancellationTokenSource _generationCts = new();
     private HashSet<TileKey> _wanted = new();
 
@@ -52,11 +52,12 @@ public sealed class RenderScheduler
     public void Request(in TileRequest request)
     {
         TileKey key = request.Key;
-        if (_cache.Contains(key) || !_inFlight.Add(key))
+        if (_cache.Contains(key) || _inFlight.ContainsKey(key))
         {
             return;
         }
 
+        _inFlight[key] = request;
         int generation = Generation;
         CancellationToken ct = _generationCts.Token;
         TileRequest req = request;
@@ -80,7 +81,7 @@ public sealed class RenderScheduler
 
     private void Deliver(TileKey key, int generation, Task<SoftwareBitmap?> task)
     {
-        _inFlight.Remove(key);
+        _inFlight.Remove(key, out TileRequest request);
         if (task.IsCanceled)
         {
             return;
@@ -95,7 +96,12 @@ public sealed class RenderScheduler
         SoftwareBitmap? bitmap = task.Result;
         if (bitmap is null)
         {
-            // Skipped: no longer wanted. If it is wanted again later, a new request will come in.
+            // Skipped because it was not (yet) in the wanted snapshot. If it is wanted now, try again.
+            if (generation == Generation && _wanted.Contains(key) && !_cache.Contains(key))
+            {
+                Request(request);
+            }
+
             return;
         }
 
