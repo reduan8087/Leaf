@@ -47,4 +47,16 @@
     <LinkerArg Include="/LIBPATH:&quot;$(LeafWinSdkLibRoot)\um\x64&quot;" />
     <LinkerArg Include="/LIBPATH:&quot;$(LeafWinSdkLibRoot)\ucrt\x64&quot;" />
   </ItemGroup>
+
+  <!--
+    The Native AOT publish pipeline does not carry the app's compiled XAML resources (Leaf.pri / *.xbf) into the
+    publish folder; without them WinUI fails at startup with a stowed exception (0xC000027B, E_FAIL). Copy them.
+  -->
+  <Target Name="LeafCopyXamlResourcesToPublish" AfterTargets="Publish">
+    <ItemGroup>
+      <_LeafXamlResource Include="$(OutDir)*.pri;$(OutDir)*.xbf" />
+    </ItemGroup>
+    <Copy SourceFiles="@(_LeafXamlResource)" DestinationFolder="$(PublishDir)" SkipUnchangedFiles="true" />
+    <Message Importance="high" Text="Leaf: copied @(_LeafXamlResource->Count()) XAML resource file(s) to $(PublishDir)" />
+  </Target>
 </Project>
