@@ -105,11 +105,20 @@ internal static class TestAutomation
                     }
 
                     break;
+                case "touchfile":
+                    // simulate an external save so the file watcher offers a reload
+                    if (viewer.Session is { } s)
+                    {
+                        File.SetLastWriteTimeUtc(s.Path, DateTime.UtcNow);
+                    }
+
+                    break;
                 default:
                     continue;
             }
 
             await Task.Delay(400);
+            PerfLog.Stamp($"after-{action} offset={viewer.VerticalOffset:F0}/{viewer.ScrollableHeight:F0} vh={viewer.ViewportHeight:F0} page={viewer.CurrentPage + 1} zoom={viewer.Zoom:F2}");
         }
 
         PerfLog.Stamp("actions-done");

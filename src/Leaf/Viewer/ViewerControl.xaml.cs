@@ -37,6 +37,7 @@ public sealed partial class ViewerControl : UserControl, IDisposable
     private DocumentSession? _session;
     private RenderScheduler? _scheduler;
     private PageLayout? _layout;
+    private Services.DocumentWatcher? _watcher;
     private double _zoom = 1.0;
     private double _pendingZoom = 1.0;
     private Point _zoomAnchor;
@@ -115,16 +116,12 @@ public sealed partial class ViewerControl : UserControl, IDisposable
         RefreshVisible(prefetch: false);
     }
 
+    /// <summary>Set by the host: reopens the current file (handles password prompts). Used by "Reload".</summary>
+    public Func<Task<DocumentSession?>>? Reopen { get; set; }
+
     public async Task LoadAsync(DocumentSession session)
     {
-        _session = session;
-        _layout = new PageLayout(session.Pages);
-        PageHost.Layout = _layout;
-        _scheduler = new RenderScheduler(session, _cache, DispatcherQueue);
-        _scheduler.TileReady += OnTileReady;
-        _scheduler.RenderFailed += ex => ShowNotice(InfoBarSeverity.Warning, "Rendering problem", ex.Message);
-        PageCountText.Text = $"/ {session.PageCount}";
-        Busy.IsActive = false;
+        AttachSession(session);
 
         // Wait for a real viewport size before choosing the fit-width zoom.
         if (Scroller.ViewportWidth <= 0)
@@ -142,6 +139,89 @@ public sealed partial class ViewerControl : UserControl, IDisposable
         Focus(FocusState.Programmatic);
     }
 
+    private void AttachSession(DocumentSession session)
+    {
+        _session = session;
+        _layout = new PageLayout(session.Pages);
+        PageHost.Layout = _layout;
+        _scheduler = new RenderScheduler(session, _cache, DispatcherQueue);
+        _scheduler.TileReady += OnTileReady;
+        _scheduler.RenderFailed += ex => ShowNotice(InfoBarSeverity.Warning, "Rendering problem", ex.Message);
+        PageCountText.Text = $"/ {session.PageCount}";
+        Busy.IsActive = false;
+
+        _watcher?.Dispose();
+        _watcher = new Services.DocumentWatcher(session.Path, DispatcherQueue);
+        _watcher.Changed += (_, _) => OfferReload();
+    }
+
+    private void DetachSession()
+    {
+        _watcher?.Dispose();
+        _watcher = null;
+        CancelSearch();
+        ClearSelection();
+        _hits.Clear();
+        _hitsByPage.Clear();
+        _currentHit = -1;
+        PageHost.RecycleAll();
+        _scheduler?.BumpGeneration();
+        _cache.Clear();
+        _session?.Dispose();
+        _session = null;
+        _scheduler = null;
+    }
+
+    private void OfferReload()
+    {
+        if (_disposed || _session is null)
+        {
+            return;
+        }
+
+        var button = new Button { Content = "Reload" };
+        button.Click += (_, _) => { ViewerNotice.IsOpen = false; _ = ReloadAsync(); };
+        ViewerNotice.ActionButton = button;
+        ShowNotice(InfoBarSeverity.Informational, "This file changed on disk", "Reload to see the latest version.");
+    }
+
+    /// <summary>Reopens the file and restores zoom, rotation and scroll position.</summary>
+    public async Task ReloadAsync()
+    {
+        if (_disposed || Reopen is null || _session is null)
+        {
+            return;
+        }
+
+        double zoom = _zoom;
+        ZoomMode mode = _zoomMode;
+        int rotation = _rotation;
+        double x = Scroller.HorizontalOffset;
+        double y = Scroller.VerticalOffset;
+
+        DocumentSession? fresh = await Reopen();
+        if (fresh is null || _disposed)
+        {
+            fresh?.Dispose();
+            return;
+        }
+
+        DetachSession();
+        AttachSession(fresh);
+        ViewerNotice.ActionButton = null;
+        ViewerNotice.IsOpen = false;
+        _rotation = rotation;
+        _zoomMode = mode;
+        _zoom = _pendingZoom = mode == ZoomMode.Custom ? zoom : ComputeModeZoom();
+        _layout!.Update(_zoom, _rotation, Scroller.ViewportWidth);
+        PageHost.InvalidateMeasure();
+        PageHost.UpdateLayout();
+        ZoomText.Text = $"{Math.Round(_zoom * 100)}%";
+        Scroller.ChangeView(x, Math.Min(y, Scroller.ScrollableHeight), null, disableAnimation: true);
+        RefreshVisible(prefetch: true);
+        StateChanged?.Invoke(this);
+    }
+
     public void Dispose()
     {
         if (_disposed)
@@ -152,17 +232,12 @@ public sealed partial class ViewerControl : UserControl, IDisposable
         _disposed = true;
         _commitTimer.Stop();
         _prefetchTimer.Stop();
-        CancelSearch();
         if (XamlRoot is not null)
         {
             XamlRoot.Changed -= OnXamlRootChanged;
         }
 
-        PageHost.RecycleAll();
-        _scheduler?.BumpGeneration();
-        _cache.Clear();
-        _session?.Dispose();
-        _session = null;
+        DetachSession();
     }
 
     // ------------------------------------------------------------------ viewport → tiles
@@ -536,6 +611,10 @@ public sealed partial class ViewerControl : UserControl, IDisposable
     }
 
     public double ViewportHeight => Scroller.ViewportHeight;
+
+    public double VerticalOffset => Scroller.VerticalOffset;
+
+    public double ScrollableHeight => Scroller.ScrollableHeight;
 
     public bool CanScrollDown => Scroller.VerticalOffset < Scroller.ScrollableHeight - 1;
 

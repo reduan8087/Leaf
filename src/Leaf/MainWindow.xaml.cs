@@ -1,5 +1,6 @@
 using Leaf.Dialogs;
 using Leaf.Pdfium;
+using Leaf.Services;
 using Leaf.Viewer;
 using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
@@ -9,6 +10,7 @@ using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Media.Imaging;
 using Windows.ApplicationModel.DataTransfer;
 using Windows.Foundation;
+using Windows.Graphics;
 using Windows.Storage;
 using Windows.Storage.Pickers;
 using Windows.System;
@@ -25,6 +27,7 @@ public sealed partial class MainWindow : Window
         Title = "Leaf";
         SystemBackdrop = new MicaBackdrop();
         SetUpTitleBar();
+        SetInitialSize();
         WireInput();
         Closed += (_, _) =>
         {
@@ -33,6 +36,7 @@ public sealed partial class MainWindow : Window
                 (item.Tag as DocumentTab)?.Viewer.Dispose();
             }
         };
+        Root.Loaded += (_, _) => MaybeOfferDefaultApp();
     }
 
     private void SetUpTitleBar()
@@ -44,6 +48,23 @@ public sealed partial class MainWindow : Window
         {
             AppWindow.SetIcon(IconPath);
             AppIcon.Source = new BitmapImage(new Uri(IconPath));
+        }
+    }
+
+    /// <summary>Open at ~80% of the work area, centred, so a document is readable at fit-width immediately.</summary>
+    private void SetInitialSize()
+    {
+        try
+        {
+            DisplayArea area = DisplayArea.GetFromWindowId(AppWindow.Id, DisplayAreaFallback.Primary);
+            RectInt32 work = area.WorkArea;
+            int w = (int)(work.Width * 0.8);
+            int h = (int)(work.Height * 0.88);
+            AppWindow.MoveAndResize(new RectInt32(work.X + (work.Width - w) / 2, work.Y + (work.Height - h) / 2, w, h));
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or ArgumentException)
+        {
+            // keep the default size
         }
     }
 
@@ -95,44 +116,57 @@ public sealed partial class MainWindow : Window
         Tabs.TabItems.Add(tab);
         Tabs.SelectedItem = tab;
         viewer.StateChanged += _ => UpdateTitle();
+        viewer.Reopen = () => OpenSessionAsync(path, closeTabOnFailure: null);
 
+        DocumentSession? session = await OpenSessionAsync(path, closeTabOnFailure: tab);
+        if (session is null)
+        {
+            return;
+        }
+
+        if (!Tabs.TabItems.Contains(tab))
+        {
+            session.Dispose(); // tab was closed while loading
+            return;
+        }
+
+        await viewer.LoadAsync(session);
+        UpdateTitle();
+        _ = TestAutomation.RunIfRequestedAsync(viewer);
+    }
+
+    /// <summary>Opens a session, prompting for a password as needed. Returns null when cancelled or failed (error shown).</summary>
+    private async Task<DocumentSession?> OpenSessionAsync(string path, TabViewItem? closeTabOnFailure)
+    {
         string? password = null;
         while (true)
         {
             try
             {
-                DocumentSession session = await DocumentSession.OpenAsync(path, password);
-                if (!Tabs.TabItems.Contains(tab))
-                {
-                    session.Dispose(); // tab was closed while loading
-                    return;
-                }
-
-                await viewer.LoadAsync(session);
-                UpdateTitle();
-                _ = TestAutomation.RunIfRequestedAsync(viewer);
-                return;
+                return await DocumentSession.OpenAsync(path, password);
             }
             catch (PdfException ex) when (ex.Error == PdfError.Password)
             {
                 password = await PasswordDialog.ShowAsync(Content.XamlRoot, Path.GetFileName(path), previousAttemptFailed: password is not null);
                 if (password is null)
                 {
-                    CloseTab(tab);
-                    return;
+                    if (closeTabOnFailure is not null)
+                    {
+                        CloseTab(closeTabOnFailure);
+                    }
+
+                    return null;
                 }
             }
-            catch (PdfException ex)
+            catch (Exception ex) when (ex is PdfException or IOException or UnauthorizedAccessException)
             {
-                CloseTab(tab);
+                if (closeTabOnFailure is not null)
+                {
+                    CloseTab(closeTabOnFailure);
+                }
+
                 ShowError($"Can't open {Path.GetFileName(path)}", ex.Message);
-                return;
-            }
-            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-            {
-                CloseTab(tab);
-                ShowError($"Can't open {Path.GetFileName(path)}", ex.Message);
-                return;
+                return null;
             }
         }
     }
@@ -145,10 +179,60 @@ public sealed partial class MainWindow : Window
 
     public void ShowError(string title, string message)
     {
+        Notice.ActionButton = null;
         Notice.Severity = InfoBarSeverity.Error;
         Notice.Title = title;
         Notice.Message = message;
         Notice.IsOpen = true;
+    }
+
+    // ----- Default app prompt -----
+
+    private void MaybeOfferDefaultApp()
+    {
+        if (!DefaultAppService.IsRegistered() || DefaultAppService.IsDefaultPdfHandler() || DefaultAppService.PromptDismissed)
+        {
+            return;
+        }
+
+        var button = new Button { Content = "Set as default" };
+        button.Click += async (_, _) => { Notice.IsOpen = false; await DefaultAppService.OpenDefaultAppsSettingsAsync(); };
+        Notice.ActionButton = button;
+        Notice.Severity = InfoBarSeverity.Informational;
+        Notice.Title = "Make Leaf your default PDF app?";
+        Notice.Message = "Windows opens a Settings page where one click sets Leaf as the default for .pdf files.";
+        Notice.CloseButtonClick += (_, _) => DefaultAppService.DismissPrompt();
+        Notice.IsOpen = true;
+    }
+
+    private async void OnSetDefaultClick(object sender, RoutedEventArgs e)
+    {
+        if (!DefaultAppService.IsRegistered())
+        {
+            ShowError("Leaf is not installed", "Run the Leaf installer first; it registers Leaf as a PDF app so Windows can make it the default.");
+            return;
+        }
+
+        await DefaultAppService.OpenDefaultAppsSettingsAsync();
+    }
+
+    private async void OnAboutClick(object sender, RoutedEventArgs e)
+    {
+        var text = new TextBlock
+        {
+            TextWrapping = TextWrapping.Wrap,
+            Text = $"Leaf {typeof(MainWindow).Assembly.GetName().Version?.ToString(3) ?? "0.1"}\n\nA light, fast PDF reader for Windows.\n\n" +
+                   "Rendering: PDFium (Apache License 2.0)\nUI: Windows App SDK / WinUI 3\nRuntime: .NET (Native AOT)\n\n" +
+                   "Shortcuts: Ctrl+O open, Ctrl+W close tab, Ctrl+F find, F3 next, Ctrl+G go to page, Ctrl+wheel / Ctrl+= / Ctrl+- zoom, Ctrl+0 fit width, Ctrl+Shift+R rotate, Ctrl+A select page, Ctrl+C copy.",
+        };
+        var dialog = new ContentDialog
+        {
+            XamlRoot = Content.XamlRoot,
+            Title = "About Leaf",
+            Content = text,
+            CloseButtonText = "Close",
+        };
+        await dialog.ShowAsync();
     }
 
     // ----- Handlers -----

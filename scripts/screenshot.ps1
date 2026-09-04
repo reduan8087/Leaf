@@ -46,7 +46,8 @@ if ($Actions) { $env:LEAF_TEST_ACTIONS = $Actions } else { Remove-Item Env:\LEAF
 $t0 = Get-Date
 $p = Start-Process -FilePath $Exe -ArgumentList ('"' + $Pdf + '"') -PassThru
 $deadline = (Get-Date).AddSeconds(20)
-while ($p.MainWindowHandle -eq 0 -and -not $p.HasExited -and (Get-Date) -lt $deadline) { Start-Sleep -Milliseconds 10; $p.Refresh() }
+# WinUI creates helper windows first; wait for the real one (it carries the title).
+while (-not $p.HasExited -and (Get-Date) -lt $deadline -and ($p.MainWindowHandle -eq 0 -or [string]::IsNullOrEmpty($p.MainWindowTitle))) { Start-Sleep -Milliseconds 10; $p.Refresh() }
 if ($p.HasExited) { throw "Leaf exited early with code $($p.ExitCode)" }
 $windowMs = [int]((Get-Date) - $t0).TotalMilliseconds
 $h = $p.MainWindowHandle
@@ -59,6 +60,8 @@ foreach ($k in $Keys) {
 }
 Start-Sleep -Seconds $Wait
 $p.Refresh()
+if ($p.HasExited) { throw "Leaf exited during the run with code $($p.ExitCode)" }
+$h = $p.MainWindowHandle
 
 $r = New-Object ShotNative+RECT
 if ([ShotNative]::DwmGetWindowAttribute($h, 9, [ref]$r, 16) -ne 0) { [ShotNative]::GetWindowRect($h, [ref]$r) | Out-Null }   # 9 = DWMWA_EXTENDED_FRAME_BOUNDS

@@ -20,9 +20,27 @@
                 <ColumnDefinition x:Name="CaptionSpacer" Width="140" />
             </Grid.ColumnDefinitions>
 
-            <Image x:Name="AppIcon" Grid.Column="0" Width="16" Height="16" Margin="12,0,8,0" VerticalAlignment="Center" />
+            <Button x:Name="AppMenuButton" Grid.Column="0" Margin="6,0,2,0" Padding="6" VerticalAlignment="Center"
+                    Background="Transparent" BorderThickness="0" ToolTipService.ToolTip="Leaf menu">
+                <Image x:Name="AppIcon" Width="16" Height="16" />
+                <Button.Flyout>
+                    <MenuFlyout Placement="BottomEdgeAlignedLeft">
+                        <MenuFlyoutItem Text="Open…" Click="OnOpenClick">
+                            <MenuFlyoutItem.KeyboardAcceleratorTextOverride>Ctrl+O</MenuFlyoutItem.KeyboardAcceleratorTextOverride>
+                            <MenuFlyoutItem.Icon><FontIcon Glyph="&#xE8E5;" /></MenuFlyoutItem.Icon>
+                        </MenuFlyoutItem>
+                        <MenuFlyoutItem Text="Make Leaf the default PDF app…" Click="OnSetDefaultClick">
+                            <MenuFlyoutItem.Icon><FontIcon Glyph="&#xE73E;" /></MenuFlyoutItem.Icon>
+                        </MenuFlyoutItem>
+                        <MenuFlyoutSeparator />
+                        <MenuFlyoutItem Text="About Leaf" Click="OnAboutClick">
+                            <MenuFlyoutItem.Icon><FontIcon Glyph="&#xE946;" /></MenuFlyoutItem.Icon>
+                        </MenuFlyoutItem>
+                    </MenuFlyout>
+                </Button.Flyout>
+            </Button>
 
-            <TabView x:Name="Tabs" Grid.Column="1"
+            <TabView x:Name="Tabs" Grid.Column="1" Margin="0,0,0,0"
                      VerticalAlignment="Bottom"
                      IsAddTabButtonVisible="True"
                      AddTabButtonClick="OnAddTabClick"
