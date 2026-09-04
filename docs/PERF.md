@@ -26,13 +26,32 @@ this is the WinUI 3 framework baseline and the floor for any WinUI app.
 
 Publish folder 107 MB including a 36 MB PDB (excluded from the installer); Leaf.exe 7.6 MB; pdfium.dll 6.9 MB.
 
+## 2026-09-04 — v0.1.1 (crash fix: tiles are WriteableBitmaps)
+
+v0.1.0 crashed 10–30 s after a resize or on scroll (RO_E_CLOSED: the SoftwareBitmap behind each SoftwareBitmapSource was disposed
+but XAML re-reads it). v0.1.1 keeps tile pixels in WriteableBitmaps that XAML owns; each cached tile therefore costs CPU + GPU memory.
+Same 60-page document, installed Native AOT build, 3 warm runs:
+
+| Metric | v0.1.0 | v0.1.1 |
+|---|---|---|
+| Time to window (warm) | 472 ms | 214 ms |
+| Time to first painted page | ~950 ms | ~440 ms |
+| Working set, idle | 156 MB | 208 MB |
+| Private working set (Task Manager), idle | 87 MB | 139 MB |
+| Working set after scrolling all 60 pages | 170 MB | 224 MB (peak 263 MB) |
+| Soak (resize, scroll, zoom, minimize/restore, 60–75 s) | crashed | passed |
+
+Tile cache budget is now clamp(2 × viewport bytes, 32 MiB, 64 MiB) and prefetch is 0.75 viewport ahead / 0.25 behind.
+The idle increase is the retained CPU copies of visible + prefetched tiles; the v0.2 lever is GPU-only tiles
+(VirtualSurfaceImageSource + Direct2D), which would remove the CPU copies without reintroducing disposable objects.
+
 ## Budgets (revised from measurements; enforce with /leaf-perf)
 | Metric | Budget |
 |---|---|
 | Warm time to window | <= 500 ms |
 | Warm time to first painted page (text PDF) | <= 1,000 ms |
-| Private working set, one document idle | <= 100 MB |
-| Working set after scrolling a 60-page document | <= 200 MB |
+| Private working set (Task Manager), one document idle | <= 150 MB |
+| Working set after scrolling a 60-page document | <= 250 MB |
 | Installer | <= 40 MB |
 
 ## Known levers for v0.2

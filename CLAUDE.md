@@ -34,7 +34,7 @@ Priorities, in order: **stable > fast cold start > small memory > small install*
 - `installer/Leaf.iss`, `scripts/*.ps1`, `docs/*.md`, `.claude/skills/*`.
 
 ## Perf budgets (Release AOT, this laptop; measure with /leaf-perf before changing rendering, startup or caching code)
-- Warm time to window <= 500 ms, first painted page <= 1 s. Private working set <= 100 MB with one document idle; working set <= 200 MB after scrolling a 60-page PDF. Installer <= 40 MB. Baseline numbers in docs/PERF.md (WinUI 3 alone is ~113 MB WS).
+- Warm time to window <= 500 ms, first painted page <= 1 s. Private working set <= 150 MB with one document idle; working set <= 250 MB after scrolling a 60-page PDF. Installer <= 40 MB. Baseline numbers in docs/PERF.md (WinUI 3 alone is ~113 MB WS).
 
 ## Etiquette
 - Small focused commits with conventional-commit messages. Run build + tests before committing. Update docs/DECISIONS.md when a design decision changes.

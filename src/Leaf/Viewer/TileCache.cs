@@ -41,7 +41,7 @@ public sealed class TileCache
     private HashSet<TileKey> _pinned = new();
     private long _clock;
 
-    public long BudgetBytes { get; set; } = 64L << 20;
+    public long BudgetBytes { get; set; } = 48L << 20;
     public long TotalBytes { get; private set; }
     public int Count => _entries.Count;
 

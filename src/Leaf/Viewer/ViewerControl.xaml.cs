@@ -277,7 +277,7 @@ public sealed partial class ViewerControl : UserControl, IDisposable
         }
 
         // Each cached tile costs CPU (WriteableBitmap) + GPU (XAML surface) memory, so keep the budget modest.
-        _cache.BudgetBytes = Math.Clamp((long)(3 * Scroller.ViewportWidth * Scroller.ViewportHeight * _rasterizationScale * _rasterizationScale * 4), 48L << 20, 96L << 20);
+        _cache.BudgetBytes = Math.Clamp((long)(2 * Scroller.ViewportWidth * Scroller.ViewportHeight * _rasterizationScale * _rasterizationScale * 4), 32L << 20, 64L << 20);
         RefreshVisible(prefetch: false);
     }
 
@@ -290,8 +290,8 @@ public sealed partial class ViewerControl : UserControl, IDisposable
         }
 
         Rect vp = ViewportRect;
-        double aheadFactor = prefetch ? 1.0 : 0.0;
-        double behindFactor = prefetch ? 0.5 : 0.0;
+        double aheadFactor = prefetch ? 0.75 : 0.0;
+        double behindFactor = prefetch ? 0.25 : 0.0;
         (int first, int last) = _layout.PagesIntersecting(vp.Top - vp.Height * Math.Max(behindFactor, 0.25), vp.Bottom + vp.Height * Math.Max(aheadFactor, 0.25));
         if (last < first)
         {

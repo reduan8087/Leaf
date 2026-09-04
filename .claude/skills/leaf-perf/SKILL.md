@@ -30,8 +30,8 @@ Run 1 after a reboot is the cold number; later runs are warm.
 |---|---|
 | Warm time to window | <= 500 ms |
 | Warm time to first painted page (text PDF) | <= 1000 ms |
-| Private working set, one document idle | <= 100 MB |
-| Working set after scrolling a 60-page PDF | <= 200 MB |
+| Private working set, one document idle | <= 150 MB |
+| Working set after scrolling a 60-page PDF | <= 250 MB |
 | Publish folder (without PDB) | <= 80 MB |
 | Installer | <= 40 MB |
 

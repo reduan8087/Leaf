@@ -7,7 +7,7 @@ Native AOT executable and shipped as a per-user installer with no prerequisites.
 
 ## Why
 Adobe Acrobat spawns nine processes and ~540 MB to show a 60-page document, and takes almost three seconds to open.
-Leaf opens the same file in under half a second in a single ~155 MB process (87 MB private), with one window and tabs.
+Leaf opens the same file in about a quarter of a second in a single ~210 MB process (139 MB private), with one window and tabs.
 See [docs/PERF.md](docs/PERF.md) for the measurements.
 
 ## Features (v0.1)
