@@ -438,7 +438,8 @@ public sealed partial class ViewerControl : UserControl, IDisposable
         }
         else
         {
-            _scheduler.Request(new TileRequest(key, w, h, 0, 0, w, h, 500));
+            // Highest priority: a 256 px placeholder is cheap and makes the page appear immediately; crisp tiles follow.
+            _scheduler.Request(new TileRequest(key, w, h, 0, 0, w, h, -5));
         }
     }
 

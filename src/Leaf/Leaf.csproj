@@ -24,6 +24,13 @@
     <OptimizationPreference>Speed</OptimizationPreference>
     <StackTraceSupport>true</StackTraceSupport>
 
+    <!-- Runtime trims: fewer threads and smaller heaps for a single-window desktop app. -->
+    <ConcurrentGarbageCollection>false</ConcurrentGarbageCollection>
+    <ServerGarbageCollection>false</ServerGarbageCollection>
+    <EventSourceSupport>false</EventSourceSupport>
+    <UseSystemResourceKeys>true</UseSystemResourceKeys>
+    <MetricsSupport>false</MetricsSupport>
+
     <!-- We provide Program.Main (single-instance redirect before XAML starts). -->
     <DefineConstants>$(DefineConstants);DISABLE_XAML_GENERATED_MAIN</DefineConstants>
     <StartupObject>Leaf.Program</StartupObject>

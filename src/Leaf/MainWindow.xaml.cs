@@ -20,6 +20,7 @@ namespace Leaf;
 public sealed partial class MainWindow : Window
 {
     private static readonly string IconPath = Path.Combine(AppContext.BaseDirectory, "Assets", "Leaf.ico");
+    private readonly TaskCompletionSource _loaded = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
     public MainWindow()
     {
@@ -36,8 +37,15 @@ public sealed partial class MainWindow : Window
                 (item.Tag as DocumentTab)?.Viewer.Dispose();
             }
         };
-        Root.Loaded += (_, _) => MaybeOfferDefaultApp();
+        Root.Loaded += (_, _) =>
+        {
+            _loaded.TrySetResult();
+            MaybeOfferDefaultApp();
+        };
     }
+
+    /// <summary>ContentDialogs need a loaded visual tree; awaiting this makes early activations (file double-click) safe.</summary>
+    private Task WhenLoadedAsync() => Root.IsLoaded ? Task.CompletedTask : _loaded.Task;
 
     private void SetUpTitleBar()
     {
@@ -91,7 +99,18 @@ public sealed partial class MainWindow : Window
 
     // ----- Public API used by App -----
 
-    public void OpenFile(string path) => _ = OpenFileAsync(path);
+    public async void OpenFile(string path)
+    {
+        try
+        {
+            await OpenFileAsync(path);
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[Leaf] OpenFile failed: {ex}");
+            ShowError($"Can't open {Path.GetFileName(path)}", ex.Message);
+        }
+    }
 
     public async Task OpenFileAsync(string path)
     {
@@ -147,6 +166,7 @@ public sealed partial class MainWindow : Window
             }
             catch (PdfException ex) when (ex.Error == PdfError.Password)
             {
+                await WhenLoadedAsync();
                 password = await PasswordDialog.ShowAsync(Content.XamlRoot, Path.GetFileName(path), previousAttemptFailed: password is not null);
                 if (password is null)
                 {
@@ -218,6 +238,7 @@ public sealed partial class MainWindow : Window
 
     private async void OnAboutClick(object sender, RoutedEventArgs e)
     {
+        await WhenLoadedAsync();
         var text = new TextBlock
         {
             TextWrapping = TextWrapping.Wrap,

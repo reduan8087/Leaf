@@ -31,3 +31,18 @@ User choice: "Viewing + Find + text selection". Text layout per realized page is
 
 ## 2026-09-04 — One window with tabs, single process
 User choice. Second launches redirect through `AppInstance.RedirectActivationToAsync` before XAML loads.
+
+## 2026-09-04 — Native AOT publish workarounds (scripts/publish.ps1)
+Two machine-specific gaps: the Windows Kits\10 folder is missing (registry lists SDK 26100 but no files), so the MSVC link step could
+not find kernel32.lib/ucrt.lib; and VS 2022's vcvarsall.bat prints a `vswhere.exe` error that corrupts the linker path the ILCompiler
+targets parse. Fix: publish.ps1 fetches the official `Microsoft.Windows.SDK.CPP.x64` NuGet package once into `tools/winsdk-libs` and passes
+its `um\x64` and `ucrt\x64` folders as `/LIBPATH` linker args (`LeafWinSdkLibRoot`), and prepends the VS Installer folder to PATH.
+When a real Windows SDK is installed the script uses it automatically. Alternative rejected: installing the Windows SDK requires admin.
+
+## 2026-09-04 — Copy XAML resources into the AOT publish folder
+The AOT publish pipeline dropped `Leaf.pri`/`*.xbf`; WinUI then crashed at startup with a stowed exception (0xC000027B, E_FAIL).
+`Leaf.csproj` copies `$(OutDir)*.pri;*.xbf` after Publish. Keep this until the Windows App SDK targets handle it.
+
+## 2026-09-04 — Perf budgets set from measurements, not guesses
+WinUI 3 alone costs ~113 MB working set and ~200 ms warm window-up, so the original "idle WS <= 90 MB" was unattainable. Budgets now:
+window <= 500 ms, first page <= 1 s, private WS <= 100 MB idle, WS <= 200 MB after scrolling 60 pages, installer <= 40 MB (docs/PERF.md).

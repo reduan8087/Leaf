@@ -28,12 +28,12 @@ Run 1 after a reboot is the cold number; later runs are warm.
 ## Budgets (Release AOT, this laptop: i7-11800H, 1920x1200 @125 %)
 | Metric | Budget |
 |---|---|
-| Warm start to first painted page | <= 400 ms |
-| Cold start to first painted page | <= 1000 ms |
-| Working set, one text PDF idle | <= 90 MB |
-| Working set after scrolling a 300-page PDF | <= 150 MB |
-| Publish folder | <= 80 MB |
-| Installer | <= 35 MB |
+| Warm time to window | <= 500 ms |
+| Warm time to first painted page (text PDF) | <= 1000 ms |
+| Private working set, one document idle | <= 100 MB |
+| Working set after scrolling a 60-page PDF | <= 200 MB |
+| Publish folder (without PDB) | <= 80 MB |
+| Installer | <= 40 MB |
 
 Record results in `docs/PERF.md` (date, commit, numbers) whenever a budget-relevant area changes. If a number regresses,
 say so plainly in the final message with the before/after table.
