@@ -18,7 +18,7 @@ metadata:
 # PDFium in Leaf
 
 Binary: `bblanchon.PDFium.Win32` 154.0.8035 (chromium/8035, non-V8, non-XFA, Apache-2.0) -> `pdfium.dll` next to the exe.
-Bindings: `src/Leaf.Pdfium/Native/Pdfium.cs` (`[LibraryImport("pdfium")]`, `static unsafe partial class`).
+Bindings: `src/Leaf.Pdfium/Native/Pdfium.cs` (class `NativeMethods`, `[LibraryImport("pdfium")]`, `static unsafe partial class`).
 
 ## Non-negotiables
 1. **Single thread.** "None of the PDFium APIs are thread-safe." Every call goes through `PdfiumThread` (priority queue). Debug builds assert it.

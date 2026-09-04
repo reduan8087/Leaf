@@ -38,4 +38,13 @@
     <Manifest Include="$(ApplicationManifest)" />
     <Content Include="Assets\**\*.ico" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
+
+  <!--
+    Native AOT link step: this machine has no Windows Kits\10 folder, so scripts/publish.ps1 passes the root of the
+    x64 import libraries from the Microsoft.Windows.SDK.CPP.x64 NuGet package (the folder containing um\x64 and ucrt\x64).
+  -->
+  <ItemGroup Condition="'$(LeafWinSdkLibRoot)' != ''">
+    <LinkerArg Include="/LIBPATH:&quot;$(LeafWinSdkLibRoot)\um\x64&quot;" />
+    <LinkerArg Include="/LIBPATH:&quot;$(LeafWinSdkLibRoot)\ucrt\x64&quot;" />
+  </ItemGroup>
 </Project>

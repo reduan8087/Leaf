@@ -26,3 +26,6 @@ CLAUDE.local.md
 *.etl
 *.nettrace
 *.dmp
+
+# Local tool caches (Windows SDK libs fetched by scripts/publish.ps1)
+tools/
