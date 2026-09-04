@@ -3,7 +3,7 @@
 A light, fast PDF reader for Windows 11. Native C# / .NET 10 + WinUI 3, rendering with PDFium, published as a
 Native AOT executable and shipped as a per-user installer with no prerequisites.
 
-![Leaf icon](src/Leaf/Assets/Leaf-256.png)
+![Leaf app icon](src/Leaf/Assets/Leaf-256.png) ![Leaf PDF file icon](src/Leaf/Assets/LeafPdf-256.png)
 
 ## Why
 Adobe Acrobat spawns nine processes and ~540 MB to show a 60-page document, and takes almost three seconds to open.

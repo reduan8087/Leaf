@@ -53,3 +53,10 @@ right after `SoftwareBitmapSource.SetBitmapAsync`, but XAML keeps a reference an
 Fix: render into a pooled buffer, copy into a `WriteableBitmap` on the UI thread, never dispose; the cache returns retired entries
 and the viewer unbinds them from Images first (`Retire`). Memory pressure is reported to the GC so native pixel memory is collected.
 Rule (CLAUDE.md, winui3-dev skill): never Dispose a WinRT bitmap an Image may still reference.
+
+## 2026-09-04 — v0.1.2: icon design "B · Document"
+User chose design B from three directions (A emblem tile, B green page with folded corner, C gradient monogram). File icon
+`Assets/LeafPdf.ico`: green page (#22A044→#157A33) with a #8FE08F fold, white leaf, "PDF" on a white label; sizes <= 32 px drop the
+label. App icon `Assets/Leaf.ico`: rounded tile in the same greens with the leaf. Both are rasterised per size from SVG by
+`scripts/make-icons.ps1` using headless Chrome/Edge (private profile, 512 px viewport cropped) and packed as PNG-entry ICOs.
+The document icon file was renamed (LeafDoc → LeafPdf) so Explorer's icon cache picks up the new art without a cache rebuild.
