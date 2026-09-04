@@ -366,7 +366,7 @@ public sealed partial class ViewerControl : UserControl, IDisposable
                 StampFirstPage();
             }
 
-            EnsurePlaceholder(view, page, info);
+            EnsurePlaceholder(view, page, info, wanted, requests);
         }
 
         _cache.SetPinned(pinned);
@@ -421,7 +421,7 @@ public sealed partial class ViewerControl : UserControl, IDisposable
         }
     }
 
-    private void EnsurePlaceholder(PdfPageView view, int page, PdfPageInfo info)
+    private void EnsurePlaceholder(PdfPageView view, int page, PdfPageInfo info, HashSet<TileKey> wanted, List<TileRequest> requests)
     {
         if (_scheduler is null || view.HasTiles)
         {
@@ -439,7 +439,8 @@ public sealed partial class ViewerControl : UserControl, IDisposable
         else
         {
             // Highest priority: a 256 px placeholder is cheap and makes the page appear immediately; crisp tiles follow.
-            _scheduler.Request(new TileRequest(key, w, h, 0, 0, w, h, -5));
+            wanted.Add(key);
+            requests.Add(new TileRequest(key, w, h, 0, 0, w, h, -5));
         }
     }
 

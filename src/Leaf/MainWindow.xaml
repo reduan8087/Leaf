@@ -9,6 +9,7 @@
     <Grid x:Name="Root">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
         </Grid.RowDefinitions>
 
@@ -53,7 +54,10 @@
             </TabView>
         </Grid>
 
-        <Grid x:Name="ContentHost" Grid.Row="1">
+        <!-- App-level notices get their own row so they never cover the viewer toolbar. -->
+        <InfoBar x:Name="Notice" Grid.Row="1" IsOpen="False" Margin="12,4,12,0" />
+
+        <Grid x:Name="ContentHost" Grid.Row="2">
             <StackPanel x:Name="WelcomePanel" HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="12">
                 <TextBlock Text="Leaf" Style="{ThemeResource TitleLargeTextBlockStyle}" HorizontalAlignment="Center" />
                 <TextBlock Text="A light, fast PDF reader." Style="{ThemeResource BodyTextBlockStyle}" HorizontalAlignment="Center" Opacity="0.8" />
@@ -61,7 +65,6 @@
                 <TextBlock Text="or drop a file anywhere in this window" Style="{ThemeResource CaptionTextBlockStyle}" HorizontalAlignment="Center" Opacity="0.7" />
             </StackPanel>
             <ContentPresenter x:Name="TabContent" />
-            <InfoBar x:Name="Notice" IsOpen="False" VerticalAlignment="Top" Margin="12" />
         </Grid>
     </Grid>
 </Window>
