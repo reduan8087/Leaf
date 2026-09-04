@@ -41,7 +41,10 @@ Leaf is an UNPACKAGED, self-contained WinUI 3 app published with Native AOT. Ign
 ## Threading
 - UI objects (DependencyObject, WriteableBitmap, SoftwareBitmapSource) are created and touched only on the UI thread.
 - Background results come back through `DispatcherQueue.TryEnqueue`. Never `.Result`/`.Wait()` on the UI thread.
-- `SoftwareBitmap` is agile: build it on the pdfium thread, hand it to the UI thread, `SoftwareBitmapSource.SetBitmapAsync` there.
+- Tiles and placeholders are `WriteableBitmap`s created on the UI thread from a pooled BGRA buffer (`PixelBuffer.AsStream()` write +
+  `Invalidate()`). Do NOT use `SoftwareBitmapSource`/`SoftwareBitmap` for anything an `Image` shows and never `Dispose()` a WinRT
+  bitmap XAML may still read: XAML re-reads sources on resize, re-bind and idle trimming, and a closed object is a fatal
+  RO_E_CLOSED (0xC000027B) crash (v0.1.0 bug). Retire cache entries by unbinding (`PdfPageView.DropTile`) and letting the GC collect.
 - pdfium calls happen only on `PdfiumThread` (see the `pdfium-api` skill).
 
 ## Rendering & DPI

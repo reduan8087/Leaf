@@ -166,7 +166,7 @@ public sealed partial class ViewerControl : UserControl, IDisposable
         _currentHit = -1;
         PageHost.RecycleAll();
         _scheduler?.BumpGeneration();
-        _cache.Clear();
+        Retire(_cache.Clear());
         _session?.Dispose();
         _session = null;
         _scheduler = null;
@@ -276,7 +276,8 @@ public sealed partial class ViewerControl : UserControl, IDisposable
             PageHost.InvalidateMeasure();
         }
 
-        _cache.BudgetBytes = Math.Clamp((long)(4 * Scroller.ViewportWidth * Scroller.ViewportHeight * _rasterizationScale * _rasterizationScale * 4), 64L << 20, 128L << 20);
+        // Each cached tile costs CPU (WriteableBitmap) + GPU (XAML surface) memory, so keep the budget modest.
+        _cache.BudgetBytes = Math.Clamp((long)(3 * Scroller.ViewportWidth * Scroller.ViewportHeight * _rasterizationScale * _rasterizationScale * 4), 48L << 20, 96L << 20);
         RefreshVisible(prefetch: false);
     }
 
@@ -376,8 +377,30 @@ public sealed partial class ViewerControl : UserControl, IDisposable
             _scheduler.Request(req);
         }
 
-        _cache.EvictOverBudget();
+        Retire(_cache.EvictOverBudget());
         UpdatePageIndicator(vp);
+    }
+
+    /// <summary>
+    /// Unbinds retired cache entries from every page view before they are released. Entries are plain
+    /// WriteableBitmaps (never disposed), so this only lets XAML drop its surfaces and keeps GC accounting honest.
+    /// </summary>
+    private void Retire(List<(TileKey Key, TileEntry Entry)> retired)
+    {
+        if (retired.Count == 0)
+        {
+            return;
+        }
+
+        foreach ((TileKey key, TileEntry entry) in retired)
+        {
+            foreach (PdfPageView view in PageHost.Realized.Values)
+            {
+                view.DropTile(key);
+            }
+
+            GC.RemoveMemoryPressure(entry.Bytes);
+        }
     }
 
     private IEnumerable<(TileKey Key, Rect DipRect, TileRequest Request)> TilesFor(int page, Rect pageRect, Rect reach, int dispW, int dispH, int scaleMilli, double cx, double cy)
@@ -434,7 +457,10 @@ public sealed partial class ViewerControl : UserControl, IDisposable
         var key = new TileKey(page, 0, 0, ScaleMilli(thumbScale), _rotation);
         if (_cache.TryGet(key, out TileEntry entry))
         {
-            view.SetPlaceholder(entry.Source);
+            if (view.PlaceholderKey != key)
+            {
+                view.SetPlaceholder(key, entry.Source);
+            }
         }
         else
         {
@@ -668,11 +694,11 @@ public sealed partial class ViewerControl : UserControl, IDisposable
         {
             view.ClearTiles();
             view.ClearStaleTiles();
-            view.SetPlaceholder(null);
+            view.ClearPlaceholder();
         }
 
         _scheduler.BumpGeneration();
-        _cache.Clear();
+        Retire(_cache.Clear());
         double zoom = _zoomMode == ZoomMode.Custom ? _zoom : ComputeModeZoomForRotation();
         _zoom = _pendingZoom = zoom;
         _layout.Update(zoom, _rotation, Scroller.ViewportWidth);

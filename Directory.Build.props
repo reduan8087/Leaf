@@ -11,7 +11,7 @@
     <IsAotCompatible>true</IsAotCompatible>
     <Company>Leaf</Company>
     <Product>Leaf</Product>
-    <Version>0.1.0</Version>
+    <Version>0.1.1</Version>
     <Copyright>Copyright (c) 2026 Leaf contributors</Copyright>
   </PropertyGroup>
 </Project>

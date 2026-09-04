@@ -22,6 +22,7 @@ Priorities, in order: **stable > fast cold start > small memory > small install*
 - AOT/trim-safe only: `{x:Bind}` (never `{Binding}`), every class used from XAML or as a binding source is `partial`, no reflection, no `dynamic`, JSON via `System.Text.Json` source generators, P/Invoke via `[LibraryImport]`, native callbacks via `[UnmanagedCallersOnly]`, COM via `[GeneratedComInterface]`. Do not suppress IL2xxx/IL3xxx warnings without a comment explaining why.
 - pdfium is not thread-safe: every `FPDF_*` call runs on the single `PdfiumThread`. Never call bindings from the UI thread or the thread pool.
 - Rendering is tile-based (1024 px device tiles, LRU cache with a byte budget). Never allocate a whole-page bitmap at high zoom.
+- Tiles are `WriteableBitmap`s. Never use `SoftwareBitmapSource`/`SoftwareBitmap` for anything an `Image` shows, and never `Dispose()` a WinRT bitmap XAML may still read: XAML re-reads sources on resize/re-bind and a closed object is a fatal RO_E_CLOSED (0xC000027B) crash.
 - A bad PDF must never crash the process: engine errors become `PdfException`, the UI shows a dialog/InfoBar.
 - Never lock the user's file: open with `FileShare.ReadWrite | FileShare.Delete`.
 - Keep dependencies minimal. Adding a NuGet package needs a reason in docs/DECISIONS.md.

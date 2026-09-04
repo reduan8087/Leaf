@@ -1,3 +1,4 @@
+using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Media.Imaging;
 
 namespace Leaf.Viewer;
@@ -5,17 +6,22 @@ namespace Leaf.Viewer;
 /// <summary>Identity of one rendered tile. ScaleMilli = round(renderScale * 1000) where renderScale is device px per PDF point.</summary>
 public readonly record struct TileKey(int Page, int Col, int Row, int ScaleMilli, int Rotation);
 
+/// <summary>
+/// A cached tile. The bitmap is a <see cref="WriteableBitmap"/> so XAML owns the pixels; entries are never disposed,
+/// only dropped (after the viewer unbinds them from any Image) and left to the garbage collector.
+/// </summary>
 public sealed class TileEntry
 {
-    public TileEntry(SoftwareBitmapSource source, int pixelWidth, int pixelHeight)
+    public TileEntry(WriteableBitmap bitmap, int pixelWidth, int pixelHeight)
     {
-        Source = source;
+        Bitmap = bitmap;
         PixelWidth = pixelWidth;
         PixelHeight = pixelHeight;
         Bytes = pixelWidth * pixelHeight * 4;
     }
 
-    public SoftwareBitmapSource Source { get; }
+    public WriteableBitmap Bitmap { get; }
+    public ImageSource Source => Bitmap;
     public int PixelWidth { get; }
     public int PixelHeight { get; }
     public int Bytes { get; }
@@ -24,7 +30,8 @@ public sealed class TileEntry
 
 /// <summary>
 /// UI-thread LRU cache of rendered tiles bounded by bytes. Visible tiles are pinned and never evicted;
-/// everything else goes in least-recently-used order once the budget is exceeded.
+/// everything else goes in least-recently-used order once the budget is exceeded. Eviction returns the
+/// retired entries so the caller can unbind them from Images before they are released.
 /// </summary>
 public sealed class TileCache
 {
@@ -53,18 +60,19 @@ public sealed class TileCache
 
     public bool Contains(TileKey key) => _entries.ContainsKey(key);
 
-    public void Add(TileKey key, TileEntry entry)
+    /// <summary>Inserts an entry; returns the entry it replaced, if any. Does not evict (call <see cref="EvictOverBudget"/>).</summary>
+    public TileEntry? Add(TileKey key, TileEntry entry)
     {
-        if (_entries.TryGetValue(key, out TileEntry? old))
+        _entries.TryGetValue(key, out TileEntry? old);
+        if (old is not null)
         {
             TotalBytes -= old.Bytes;
-            old.Source.Dispose();
         }
 
         entry.LastUse = ++_clock;
         _entries[key] = entry;
         TotalBytes += entry.Bytes;
-        EvictOverBudget();
+        return old;
     }
 
     public void SetPinned(HashSet<TileKey> pinned)
@@ -79,11 +87,13 @@ public sealed class TileCache
         }
     }
 
-    public void EvictOverBudget()
+    /// <summary>Removes least-recently-used unpinned entries until under budget; returns what was removed.</summary>
+    public List<(TileKey Key, TileEntry Entry)> EvictOverBudget()
     {
+        var retired = new List<(TileKey, TileEntry)>();
         if (TotalBytes <= BudgetBytes)
         {
-            return;
+            return retired;
         }
 
         var candidates = new List<KeyValuePair<TileKey, TileEntry>>();
@@ -105,39 +115,45 @@ public sealed class TileCache
 
             _entries.Remove(kv.Key);
             TotalBytes -= kv.Value.Bytes;
-            kv.Value.Source.Dispose();
+            retired.Add((kv.Key, kv.Value));
         }
+
+        return retired;
     }
 
-    /// <summary>Drops every tile that does not belong to the given generation key set (zoom/rotation change) except pinned ones.</summary>
-    public void DropWhere(Func<TileKey, bool> predicate)
+    /// <summary>Removes every unpinned entry matching the predicate; returns what was removed.</summary>
+    public List<(TileKey Key, TileEntry Entry)> DropWhere(Func<TileKey, bool> predicate)
     {
-        var doomed = new List<TileKey>();
+        var retired = new List<(TileKey, TileEntry)>();
         foreach (KeyValuePair<TileKey, TileEntry> kv in _entries)
         {
             if (predicate(kv.Key) && !_pinned.Contains(kv.Key))
             {
-                doomed.Add(kv.Key);
+                retired.Add((kv.Key, kv.Value));
             }
         }
 
-        foreach (TileKey key in doomed)
+        foreach ((TileKey key, TileEntry entry) in retired)
         {
-            TotalBytes -= _entries[key].Bytes;
-            _entries[key].Source.Dispose();
             _entries.Remove(key);
+            TotalBytes -= entry.Bytes;
         }
+
+        return retired;
     }
 
-    public void Clear()
+    /// <summary>Removes everything; returns the removed entries.</summary>
+    public List<(TileKey Key, TileEntry Entry)> Clear()
     {
-        foreach (TileEntry e in _entries.Values)
+        var retired = new List<(TileKey, TileEntry)>(_entries.Count);
+        foreach (KeyValuePair<TileKey, TileEntry> kv in _entries)
         {
-            e.Source.Dispose();
+            retired.Add((kv.Key, kv.Value));
         }
 
         _entries.Clear();
         _pinned = new HashSet<TileKey>();
         TotalBytes = 0;
+        return retired;
     }
 }

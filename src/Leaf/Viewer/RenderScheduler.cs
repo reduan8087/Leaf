@@ -3,14 +3,16 @@ using System.Runtime.InteropServices.WindowsRuntime;
 using Leaf.Pdfium;
 using Microsoft.UI.Dispatching;
 using Microsoft.UI.Xaml.Media.Imaging;
-using Windows.Graphics.Imaging;
 
 namespace Leaf.Viewer;
 
 /// <summary>
-/// Turns tile requests from the UI into pdfium work and delivers <see cref="SoftwareBitmapSource"/>s back on the UI thread.
+/// Turns tile requests from the UI into pdfium work and delivers <see cref="WriteableBitmap"/>s back on the UI thread.
 /// A generation counter drops work that became stale because of a zoom, rotation or DPI change; a "wanted" snapshot lets
 /// the pdfium thread skip tiles that scrolled out of view before they were rendered.
+///
+/// Tiles are WriteableBitmaps on purpose: XAML owns their pixel memory outright, so there is no WinRT object Leaf could
+/// close while XAML still needs it (disposing a SoftwareBitmap behind a SoftwareBitmapSource was a fatal RO_E_CLOSED crash).
 /// </summary>
 public sealed class RenderScheduler
 {
@@ -43,7 +45,7 @@ public sealed class RenderScheduler
         _inFlight.Clear();
     }
 
-    /// <summary>Snapshot of the tiles that are worth rendering right now (visible + prefetch).</summary>
+    /// <summary>Snapshot of the tiles that are worth rendering right now (visible + prefetch + placeholders).</summary>
     public void SetWanted(HashSet<TileKey> wanted)
     {
         Volatile.Write(ref _wanted, wanted);
@@ -63,14 +65,14 @@ public sealed class RenderScheduler
         TileRequest req = request;
         PdfDocument doc = _session.Document;
 
-        Task<SoftwareBitmap?> work = PdfiumThread.Instance.RunAsync(() =>
+        Task<TileBuffer?> work = PdfiumThread.Instance.RunAsync(() =>
         {
             if (ct.IsCancellationRequested || !Volatile.Read(ref _wanted).Contains(key))
             {
                 return null;
             }
 
-            return RenderToSoftwareBitmap(doc, req);
+            return Render(doc, req);
         }, req.Priority, ct);
 
         work.ContinueWith(t =>
@@ -79,7 +81,7 @@ public sealed class RenderScheduler
         }, TaskContinuationOptions.ExecuteSynchronously);
     }
 
-    private void Deliver(TileKey key, int generation, Task<SoftwareBitmap?> task)
+    private void Deliver(TileKey key, int generation, Task<TileBuffer?> task)
     {
         _inFlight.Remove(key, out TileRequest request);
         if (task.IsCanceled)
@@ -93,8 +95,8 @@ public sealed class RenderScheduler
             return;
         }
 
-        SoftwareBitmap? bitmap = task.Result;
-        if (bitmap is null)
+        TileBuffer? tile = task.Result;
+        if (tile is null)
         {
             // Skipped because it was not (yet) in the wanted snapshot. If it is wanted now, try again.
             if (generation == Generation && _wanted.Contains(key) && !_cache.Contains(key))
@@ -105,38 +107,41 @@ public sealed class RenderScheduler
             return;
         }
 
-        if (generation != Generation)
-        {
-            bitmap.Dispose();
-            return;
-        }
-
-        _ = PresentAsync(key, bitmap);
-    }
-
-    private async Task PresentAsync(TileKey key, SoftwareBitmap bitmap)
-    {
-        var source = new SoftwareBitmapSource();
         try
         {
-            await source.SetBitmapAsync(bitmap);
+            if (generation != Generation || _cache.Contains(key))
+            {
+                return; // stale, or a duplicate delivery
+            }
+
+            var bitmap = new WriteableBitmap(tile.Width, tile.Height);
+            using (Stream pixels = bitmap.PixelBuffer.AsStream())
+            {
+                pixels.Write(tile.Buffer, 0, tile.Bytes);
+            }
+
+            bitmap.Invalidate();
+            var entry = new TileEntry(bitmap, tile.Width, tile.Height);
+            GC.AddMemoryPressure(entry.Bytes);
+            TileEntry? replaced = _cache.Add(key, entry);
+            if (replaced is not null)
+            {
+                GC.RemoveMemoryPressure(replaced.Bytes);
+            }
+
+            TileReady?.Invoke(key);
         }
         catch (Exception ex)
         {
-            source.Dispose();
-            bitmap.Dispose();
             RenderFailed?.Invoke(ex);
-            return;
         }
-
-        int w = bitmap.PixelWidth;
-        int h = bitmap.PixelHeight;
-        bitmap.Dispose(); // XAML owns its own copy now
-        _cache.Add(key, new TileEntry(source, w, h));
-        TileReady?.Invoke(key);
+        finally
+        {
+            ArrayPool<byte>.Shared.Return(tile.Buffer);
+        }
     }
 
-    private static unsafe SoftwareBitmap RenderToSoftwareBitmap(PdfDocument doc, in TileRequest req)
+    private static unsafe TileBuffer Render(PdfDocument doc, in TileRequest req)
     {
         int stride = req.PixelWidth * 4;
         int bytes = stride * req.PixelHeight;
@@ -147,16 +152,21 @@ public sealed class RenderScheduler
             {
                 doc.RenderTile(req.Key.Page, req.Key.Rotation, req.DisplayedWidth, req.DisplayedHeight, req.TileX, req.TileY, req.PixelWidth, req.PixelHeight, p, stride);
             }
-
-            var bitmap = new SoftwareBitmap(BitmapPixelFormat.Bgra8, req.PixelWidth, req.PixelHeight, BitmapAlphaMode.Premultiplied);
-            bitmap.CopyFromBuffer(buffer.AsBuffer(0, bytes));
-            return bitmap;
         }
-        finally
+        catch
         {
             ArrayPool<byte>.Shared.Return(buffer);
+            throw;
         }
+
+        return new TileBuffer(buffer, req.PixelWidth, req.PixelHeight);
     }
+}
+
+/// <summary>Rendered BGRA pixels in a pooled array (returned to the pool by the scheduler after upload).</summary>
+public sealed record TileBuffer(byte[] Buffer, int Width, int Height)
+{
+    public int Bytes => Width * Height * 4;
 }
 
 /// <summary>Everything the pdfium thread needs to render one tile.</summary>

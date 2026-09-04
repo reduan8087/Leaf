@@ -46,3 +46,10 @@ The AOT publish pipeline dropped `Leaf.pri`/`*.xbf`; WinUI then crashed at start
 ## 2026-09-04 — Perf budgets set from measurements, not guesses
 WinUI 3 alone costs ~113 MB working set and ~200 ms warm window-up, so the original "idle WS <= 90 MB" was unattainable. Budgets now:
 window <= 500 ms, first page <= 1 s, private WS <= 100 MB idle, WS <= 200 MB after scrolling 60 pages, installer <= 40 MB (docs/PERF.md).
+
+## 2026-09-04 — v0.1.1: tiles are WriteableBitmaps, nothing disposable behind an Image
+v0.1.0 crashed 10–30 s after a resize or on scroll with 0xC000027B / RO_E_CLOSED: `RenderScheduler` disposed the `SoftwareBitmap`
+right after `SoftwareBitmapSource.SetBitmapAsync`, but XAML keeps a reference and re-reads it when it re-creates image surfaces.
+Fix: render into a pooled buffer, copy into a `WriteableBitmap` on the UI thread, never dispose; the cache returns retired entries
+and the viewer unbinds them from Images first (`Retire`). Memory pressure is reported to the GC so native pixel memory is collected.
+Rule (CLAUDE.md, winui3-dev skill): never Dispose a WinRT bitmap an Image may still reference.

@@ -3,7 +3,6 @@ using Microsoft.UI;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
-using Microsoft.UI.Xaml.Media.Imaging;
 using XamlPath = Microsoft.UI.Xaml.Shapes.Path;
 using Windows.Foundation;
 using Windows.UI;
@@ -13,7 +12,8 @@ namespace Leaf.Viewer;
 /// <summary>
 /// One page on screen: white paper, a canvas of tile images (device-pixel aligned), a stretched low-res
 /// placeholder shown until tiles arrive, and two overlay paths (search highlights, text selection).
-/// All coordinates inside are page-local DIPs.
+/// All coordinates inside are page-local DIPs. Image sources are only ever assigned or cleared here,
+/// so the viewer can unbind a cache entry before it is released.
 /// </summary>
 public sealed partial class PdfPageView : Grid
 {
@@ -30,8 +30,9 @@ public sealed partial class PdfPageView : Grid
     private readonly XamlPath _currentHit = new() { IsHitTestVisible = false, Fill = CurrentHitBrush };
     private readonly XamlPath _selection = new() { IsHitTestVisible = false, Fill = SelectionBrush };
     private readonly Dictionary<TileKey, Image> _tileImages = new();
-    private readonly List<TileKey> _staleKeys = new();
+    private readonly Dictionary<TileKey, Image> _staleImages = new();
     private readonly Stack<Image> _imagePool = new();
+    private TileKey? _placeholderKey;
 
     public PdfPageView()
     {
@@ -52,7 +53,9 @@ public sealed partial class PdfPageView : Grid
     public bool HasTiles => _tileImages.Count > 0;
 
     /// <summary>Cache keys of tiles kept on screen from a previous scale; they must stay pinned in the cache until cleared.</summary>
-    public IReadOnlyList<TileKey> StaleKeys => _staleKeys;
+    public IReadOnlyCollection<TileKey> StaleKeys => _staleImages.Keys;
+
+    public TileKey? PlaceholderKey => _placeholderKey;
 
     public void Bind(int pageIndex)
     {
@@ -64,15 +67,45 @@ public sealed partial class PdfPageView : Grid
         PageIndex = -1;
         ClearTiles();
         ClearStaleTiles();
-        _placeholder.Source = null;
+        ClearPlaceholder();
         _highlights.Data = null;
         _currentHit.Data = null;
         _selection.Data = null;
     }
 
-    public void SetPlaceholder(SoftwareBitmapSource? source)
+    public void SetPlaceholder(TileKey key, ImageSource source)
     {
+        _placeholderKey = key;
         _placeholder.Source = source;
+    }
+
+    public void ClearPlaceholder()
+    {
+        _placeholderKey = null;
+        _placeholder.Source = null;
+    }
+
+    /// <summary>Unbinds a cache entry that is about to be released, wherever this page shows it.</summary>
+    public void DropTile(TileKey key)
+    {
+        if (_tileImages.Remove(key, out Image? img))
+        {
+            _tiles.Children.Remove(img);
+            img.Source = null;
+            _imagePool.Push(img);
+        }
+
+        if (_staleImages.Remove(key, out Image? stale))
+        {
+            _staleTiles.Children.Remove(stale);
+            stale.Source = null;
+            _imagePool.Push(stale);
+        }
+
+        if (_placeholderKey == key)
+        {
+            ClearPlaceholder();
+        }
     }
 
     /// <summary>
@@ -95,7 +128,7 @@ public sealed partial class PdfPageView : Grid
             Canvas.SetLeft(img, Canvas.GetLeft(img) * ratio);
             Canvas.SetTop(img, Canvas.GetTop(img) * ratio);
             _staleTiles.Children.Add(img);
-            _staleKeys.Add(kv.Key);
+            _staleImages[kv.Key] = img;
         }
 
         _tileImages.Clear();
@@ -103,17 +136,14 @@ public sealed partial class PdfPageView : Grid
 
     public void ClearStaleTiles()
     {
-        foreach (UIElement child in _staleTiles.Children)
+        foreach (Image img in _staleImages.Values)
         {
-            if (child is Image img)
-            {
-                img.Source = null;
-                _imagePool.Push(img);
-            }
+            img.Source = null;
+            _imagePool.Push(img);
         }
 
         _staleTiles.Children.Clear();
-        _staleKeys.Clear();
+        _staleImages.Clear();
     }
 
     /// <summary>Shows exactly the given tiles; anything else currently shown is removed.</summary>
