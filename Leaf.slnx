@@ -1,0 +1,14 @@
+<Solution>
+  <Configurations>
+    <BuildType Name="Debug" />
+    <BuildType Name="Release" />
+    <Platform Name="x64" />
+  </Configurations>
+  <Folder Name="/src/">
+    <Project Path="src/Leaf.Pdfium/Leaf.Pdfium.csproj" />
+    <Project Path="src/Leaf/Leaf.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Leaf.Pdfium.Tests/Leaf.Pdfium.Tests.csproj" />
+  </Folder>
+</Solution>

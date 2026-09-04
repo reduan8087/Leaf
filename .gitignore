@@ -1,0 +1,28 @@
+# Build outputs
+bin/
+obj/
+artifacts/
+dist/
+*.binlog
+TestResults/
+
+# IDE
+.vs/
+.vscode/
+*.user
+*.suo
+*.swp
+.idea/
+
+# NuGet
+*.nupkg
+packages/
+
+# Claude Code local state
+.claude/settings.local.json
+CLAUDE.local.md
+
+# Perf / traces
+*.etl
+*.nettrace
+*.dmp
