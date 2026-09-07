@@ -244,6 +244,11 @@ public sealed partial class ViewerControl
         PageHost.RecycleAll();
         _scheduler.BumpGeneration();
         Retire(_cache.Clear());
+        ClearLinkCache();
+        if (PanelKind != SidePanelKind.None)
+        {
+            Panel.Load(session);
+        }
 
         int page = Math.Clamp(CurrentPage, 0, Math.Max(0, session.PageCount - 1));
         _layout = new PageLayout(session.Pages);

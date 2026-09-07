@@ -63,6 +63,7 @@ public sealed partial class ViewerControl : UserControl, IDisposable
         InitializeTextInput();
         WireAccelerators();
         ApplyPreferences(Services.SettingsStore.Current.View);
+        InitializePanel();
     }
 
     public DocumentSession? Session => _session;
@@ -144,6 +145,10 @@ public sealed partial class ViewerControl : UserControl, IDisposable
         _scheduler.RenderFailed += ex => ShowNotice(InfoBarSeverity.Warning, "Rendering problem", ex.Message);
         PageCountText.Text = $"/ {session.PageCount}";
         Busy.IsActive = false;
+        if (PanelKind != SidePanelKind.None)
+        {
+            Panel.Load(session);
+        }
 
         _watcher?.Dispose();
         _watcher = new Services.DocumentWatcher(session.Path, DispatcherQueue);
@@ -162,6 +167,7 @@ public sealed partial class ViewerControl : UserControl, IDisposable
         PageHost.RecycleAll();
         _scheduler?.BumpGeneration();
         Retire(_cache.Clear());
+        ClearLinkCache();
         _session?.Dispose();
         _session = null;
         _scheduler = null;
@@ -503,6 +509,11 @@ public sealed partial class ViewerControl : UserControl, IDisposable
             _suppressPageBox = true;
             PageBox.Text = (page + 1).ToString();
             _suppressPageBox = false;
+            if (PanelKind != SidePanelKind.None)
+            {
+                Panel.SetCurrentPage(page);
+            }
+
             StateChanged?.Invoke(this);
         }
     }
@@ -794,6 +805,7 @@ public sealed partial class ViewerControl : UserControl, IDisposable
         Add(VirtualKey.Number2, VirtualKeyModifiers.Control | VirtualKeyModifiers.Shift, () => SetColumns(2));
         Add(VirtualKey.Number3, VirtualKeyModifiers.Control | VirtualKeyModifiers.Shift, () => SetColumns(4));
         Add(VirtualKey.E, VirtualKeyModifiers.Control | VirtualKeyModifiers.Shift, ToggleContinuous);
+        Add(VirtualKey.F4, VirtualKeyModifiers.None, TogglePanel);
         Add(VirtualKey.Add, VirtualKeyModifiers.Control, ZoomIn);
         Add(VirtualKey.Subtract, VirtualKeyModifiers.Control, ZoomOut);
         Add((VirtualKey)0xBB, VirtualKeyModifiers.Control, ZoomIn);      // main-row '='/'+'

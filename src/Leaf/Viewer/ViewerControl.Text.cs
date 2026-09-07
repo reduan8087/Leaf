@@ -1,4 +1,4 @@
-using System.Text;
+﻿using System.Text;
 using Leaf.Pdfium;
 using Microsoft.UI.Input;
 using Microsoft.UI.Xaml;
@@ -364,6 +364,15 @@ public sealed partial class ViewerControl
             return;
         }
 
+        // A press on a link is a click, not the start of a drag-selection.
+        _pressedLink = LinkAt(hit.Value.page, hit.Value.local);
+        _pressedAt = point.Position;
+        if (_pressedLink is not null)
+        {
+            e.Handled = true;
+            return;
+        }
+
         PdfTextLayout layout = await _session.GetTextLayoutAsync(hit.Value.page, priority: 50);
         if (layout.CharCount == 0)
         {
@@ -429,7 +438,15 @@ public sealed partial class ViewerControl
             return;
         }
 
-        // hover cursor
+        // hover cursor: a link takes precedence, since clicking it does something other than select
+        if (hit is not null && LinkAt(hit.Value.page, hit.Value.local) is PdfLink hovered)
+        {
+            ProtectedCursor = _hand;
+            ShowLinkTarget(hovered);
+            return;
+        }
+
+        HideLinkTarget();
         bool overText = false;
         if (hit is not null && _session.TryGetCachedTextLayout(hit.Value.page) is PdfTextLayout cached && cached.CharCount > 0)
         {
@@ -444,8 +461,22 @@ public sealed partial class ViewerControl
         ProtectedCursor = overText ? _ibeam : _arrow;
     }
 
-    private void OnPagePointerReleased(object sender, PointerRoutedEventArgs e)
+    private async void OnPagePointerReleased(object sender, PointerRoutedEventArgs e)
     {
+        if (_pressedLink is PdfLink link)
+        {
+            _pressedLink = null;
+            Point position = e.GetCurrentPoint(PageHost).Position;
+            bool moved = Math.Abs(position.X - _pressedAt.X) > ClickSlopDip || Math.Abs(position.Y - _pressedAt.Y) > ClickSlopDip;
+            e.Handled = true;
+            if (!moved)
+            {
+                await ActivateLinkAsync(link);
+            }
+
+            return;
+        }
+
         if (_selecting && e.Pointer.PointerId == _selectingPointerId)
         {
             _selecting = false;

@@ -133,6 +133,14 @@ internal static class TestAutomation
                     }
 
                     break;
+                case "panel":
+                    viewer.SetPanel(arg.ToLowerInvariant() switch
+                    {
+                        "outline" or "bookmarks" => SidePanelKind.Outline,
+                        "off" or "none" => SidePanelKind.None,
+                        _ => SidePanelKind.Thumbnails,
+                    });
+                    break;
                 case "organize":
                     if (window is not null)
                     {

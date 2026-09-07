@@ -1,0 +1,83 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<UserControl
+    x:Class="Leaf.Viewer.SidePanel"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:viewer="using:Leaf.Viewer">
+
+    <Grid Background="{ThemeResource LayerFillColorDefaultBrush}"
+          BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}" BorderThickness="0,0,1,0">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+        <!-- Which panel is showing -->
+        <StackPanel Grid.Row="0" Orientation="Horizontal" Spacing="2" Padding="8,6"
+                    BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}" BorderThickness="0,0,0,1">
+            <ToggleButton x:Name="ThumbnailsTab" Click="OnShowThumbnails" Background="Transparent" BorderThickness="0"
+                          Padding="8,6" ToolTipService.ToolTip="Page thumbnails">
+                <StackPanel Spacing="2">
+                    <StackPanel Orientation="Horizontal" Spacing="2">
+                        <Rectangle Width="6" Height="6" Stroke="{ThemeResource TextFillColorPrimaryBrush}" StrokeThickness="1.3" Fill="Transparent" />
+                        <Rectangle Width="6" Height="6" Stroke="{ThemeResource TextFillColorPrimaryBrush}" StrokeThickness="1.3" Fill="Transparent" />
+                    </StackPanel>
+                    <StackPanel Orientation="Horizontal" Spacing="2">
+                        <Rectangle Width="6" Height="6" Stroke="{ThemeResource TextFillColorPrimaryBrush}" StrokeThickness="1.3" Fill="Transparent" />
+                        <Rectangle Width="6" Height="6" Stroke="{ThemeResource TextFillColorPrimaryBrush}" StrokeThickness="1.3" Fill="Transparent" />
+                    </StackPanel>
+                </StackPanel>
+            </ToggleButton>
+            <ToggleButton x:Name="OutlineTab" Click="OnShowOutline" Background="Transparent" BorderThickness="0"
+                          Padding="8,6" ToolTipService.ToolTip="Bookmarks">
+                <FontIcon Glyph="&#xE8A4;" FontSize="14" />
+            </ToggleButton>
+
+            <TextBlock x:Name="PanelTitle" VerticalAlignment="Center" Margin="10,0,0,0"
+                       Style="{ThemeResource CaptionTextBlockStyle}" Opacity="0.8" Text="Thumbnails" />
+        </StackPanel>
+
+        <!-- Thumbnails -->
+        <ListView x:Name="ThumbnailsList" Grid.Row="1" Padding="8"
+                  SelectionMode="Single" IsItemClickEnabled="True" ItemClick="OnThumbnailClick"
+                  ContainerContentChanging="OnThumbnailContainerChanging"
+                  HorizontalContentAlignment="Center">
+            <ListView.ItemTemplate>
+                <DataTemplate x:DataType="viewer:ThumbnailItem">
+                    <StackPanel Spacing="4" Margin="0,4" HorizontalAlignment="Center">
+                        <Grid Width="{x:Bind TileWidth}" Height="{x:Bind TileHeight}">
+                            <Border Background="{ThemeResource SolidBackgroundFillColorBaseBrush}"
+                                    BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}"
+                                    BorderThickness="1" CornerRadius="2">
+                                <Image Source="{x:Bind Thumbnail, Mode=OneWay}" Stretch="Uniform" Margin="2" />
+                            </Border>
+                            <!-- Separate overlay so the highlight never fades the page itself. -->
+                            <Border BorderBrush="{ThemeResource AccentFillColorDefaultBrush}" BorderThickness="2"
+                                    CornerRadius="2" IsHitTestVisible="False"
+                                    Visibility="{x:Bind CurrentVisibility, Mode=OneWay}" />
+                        </Grid>
+                        <TextBlock Text="{x:Bind Label}" HorizontalAlignment="Center"
+                                   Style="{ThemeResource CaptionTextBlockStyle}" Opacity="0.75" />
+                    </StackPanel>
+                </DataTemplate>
+            </ListView.ItemTemplate>
+        </ListView>
+
+        <!-- Outline -->
+        <TreeView x:Name="OutlineTree" Grid.Row="1" Padding="4,8" Visibility="Collapsed"
+                  SelectionMode="Single" ItemInvoked="OnOutlineInvoked">
+            <TreeView.ItemTemplate>
+                <DataTemplate x:DataType="viewer:OutlineItem">
+                    <TreeViewItem ItemsSource="{x:Bind Children}" IsExpanded="True">
+                        <TextBlock Text="{x:Bind Title}" TextWrapping="NoWrap" TextTrimming="CharacterEllipsis"
+                                   ToolTipService.ToolTip="{x:Bind Title}" />
+                    </TreeViewItem>
+                </DataTemplate>
+            </TreeView.ItemTemplate>
+        </TreeView>
+
+        <TextBlock x:Name="EmptyOutlineHint" Grid.Row="1" Visibility="Collapsed"
+                   Margin="16" TextWrapping="Wrap" Opacity="0.7"
+                   Text="This document has no bookmarks." />
+    </Grid>
+</UserControl>

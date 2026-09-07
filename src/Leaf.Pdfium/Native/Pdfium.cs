@@ -164,12 +164,16 @@ public static unsafe partial class NativeMethods
     [LibraryImport(Lib)] public static partial nint FPDFBookmark_GetNextSibling(nint document, nint bookmark);
     [LibraryImport(Lib)] public static partial uint FPDFBookmark_GetTitle(nint bookmark, void* buffer, uint buflen);
     [LibraryImport(Lib)] public static partial nint FPDFBookmark_GetDest(nint document, nint bookmark);
+    [LibraryImport(Lib)] public static partial nint FPDFBookmark_GetAction(nint bookmark);
+    [LibraryImport(Lib)] public static partial nint FPDFAction_GetDest(nint document, nint action);
     [LibraryImport(Lib)] public static partial int FPDFDest_GetDestPageIndex(nint document, nint dest);
     [LibraryImport(Lib)] public static partial nint FPDFLink_GetLinkAtPoint(nint page, double x, double y);
     [LibraryImport(Lib)] public static partial nint FPDFLink_GetDest(nint document, nint link);
     [LibraryImport(Lib)] public static partial nint FPDFLink_GetAction(nint link);
     [LibraryImport(Lib)] public static partial uint FPDFAction_GetType(nint action);
     [LibraryImport(Lib)] public static partial uint FPDFAction_GetURIPath(nint document, nint action, void* buffer, uint buflen);
+    [LibraryImport(Lib)] [return: MarshalAs(UnmanagedType.Bool)] public static partial bool FPDFLink_Enumerate(nint page, int* startPos, nint* linkAnnot);
+    [LibraryImport(Lib)] [return: MarshalAs(UnmanagedType.Bool)] public static partial bool FPDFLink_GetAnnotRect(nint linkAnnot, FS_RECTF* rect);
 
     // ---- Document editing / save (v0.2) ----
     [LibraryImport(Lib)] public static partial nint FPDF_CreateNewDocument();
