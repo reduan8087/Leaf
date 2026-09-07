@@ -1,4 +1,4 @@
-using Leaf.Pdfium.Native;
+﻿using Leaf.Pdfium.Native;
 
 namespace Leaf.Pdfium;
 

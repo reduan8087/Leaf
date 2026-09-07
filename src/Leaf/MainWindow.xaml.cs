@@ -1,4 +1,4 @@
-using Leaf.Dialogs;
+﻿using Leaf.Dialogs;
 using Leaf.Pdfium;
 using Leaf.Services;
 using Leaf.Viewer;
@@ -7,12 +7,10 @@ using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
-using Microsoft.UI.Xaml.Media.Imaging;
 using Windows.ApplicationModel.DataTransfer;
 using Windows.Foundation;
 using Windows.Graphics;
 using Windows.Storage;
-using Windows.Storage.Pickers;
 using Windows.System;
 
 namespace Leaf;
@@ -20,7 +18,14 @@ namespace Leaf;
 public sealed partial class MainWindow : Window
 {
     private static readonly string IconPath = Path.Combine(AppContext.BaseDirectory, "Assets", "Leaf.ico");
+
+    /// <summary>How close to the top edge the pointer must come to reveal the chrome in full screen.</summary>
+    private const double RevealEdgeDip = 3;
+    private const double RevealKeepDip = 88;
+
     private readonly TaskCompletionSource _loaded = new(TaskCreationOptions.RunContinuationsAsynchronously);
+    private bool _fullScreen;
+    private bool _chromeRevealed;
 
     public MainWindow()
     {
@@ -28,10 +33,12 @@ public sealed partial class MainWindow : Window
         Title = "Leaf";
         SystemBackdrop = new MicaBackdrop();
         SetUpTitleBar();
-        SetInitialSize();
+        RestoreWindowPlacement();
         WireInput();
         Closed += (_, _) =>
         {
+            RememberWindowPlacement();
+            SettingsStore.Flush();
             foreach (TabViewItem item in Tabs.TabItems.OfType<TabViewItem>().ToList())
             {
                 (item.Tag as DocumentTab)?.Viewer.Dispose();
@@ -47,6 +54,8 @@ public sealed partial class MainWindow : Window
     /// <summary>ContentDialogs need a loaded visual tree; awaiting this makes early activations (file double-click) safe.</summary>
     private Task WhenLoadedAsync() => Root.IsLoaded ? Task.CompletedTask : _loaded.Task;
 
+    private ViewerControl? CurrentViewer => (Tabs.SelectedItem as TabViewItem)?.Tag is DocumentTab doc ? doc.Viewer : null;
+
     private void SetUpTitleBar()
     {
         ExtendsContentIntoTitleBar = true;
@@ -55,26 +64,93 @@ public sealed partial class MainWindow : Window
         if (File.Exists(IconPath))
         {
             AppWindow.SetIcon(IconPath);
-            AppIcon.Source = new BitmapImage(new Uri(IconPath));
         }
     }
 
-    /// <summary>Open at ~80% of the work area, centred, so a document is readable at fit-width immediately.</summary>
-    private void SetInitialSize()
+    // ----- Window placement -----
+
+    /// <summary>
+    /// Restores the last window rectangle, falling back to ~80% of the work area. The saved rectangle is
+    /// checked against the current monitor layout first, so unplugging a second screen cannot strand the
+    /// window off-screen.
+    /// </summary>
+    private void RestoreWindowPlacement()
     {
         try
         {
+            WindowPlacement? saved = SettingsStore.Current.Window;
+            if (saved is { Width: > 200, Height: > 200 } && IsOnScreen(saved))
+            {
+                AppWindow.MoveAndResize(new RectInt32(saved.X, saved.Y, saved.Width, saved.Height));
+                if (saved.Maximized && AppWindow.Presenter is OverlappedPresenter presenter)
+                {
+                    presenter.Maximize();
+                }
+
+                return;
+            }
+
             DisplayArea area = DisplayArea.GetFromWindowId(AppWindow.Id, DisplayAreaFallback.Primary);
             RectInt32 work = area.WorkArea;
             int w = (int)(work.Width * 0.8);
             int h = (int)(work.Height * 0.88);
-            AppWindow.MoveAndResize(new RectInt32(work.X + (work.Width - w) / 2, work.Y + (work.Height - h) / 2, w, h));
+            AppWindow.MoveAndResize(new RectInt32(work.X + ((work.Width - w) / 2), work.Y + ((work.Height - h) / 2), w, h));
         }
         catch (Exception ex) when (ex is InvalidOperationException or ArgumentException)
         {
             // keep the default size
         }
     }
+
+    /// <summary>True when a decent part of the saved rectangle still lands on a connected display.</summary>
+    private static bool IsOnScreen(WindowPlacement placement)
+    {
+        var rect = new RectInt32(placement.X, placement.Y, placement.Width, placement.Height);
+        DisplayArea area = DisplayArea.GetFromRect(rect, DisplayAreaFallback.Nearest);
+        RectInt32 work = area.WorkArea;
+        int overlapX = Math.Min(rect.X + rect.Width, work.X + work.Width) - Math.Max(rect.X, work.X);
+        int overlapY = Math.Min(rect.Y + rect.Height, work.Y + work.Height) - Math.Max(rect.Y, work.Y);
+        return overlapX > 200 && overlapY > 100;
+    }
+
+    private void RememberWindowPlacement()
+    {
+        try
+        {
+            if (_fullScreen)
+            {
+                return; // full screen is a mode, not a size worth restoring into
+            }
+
+            bool maximized = AppWindow.Presenter is OverlappedPresenter { State: OverlappedPresenterState.Maximized };
+            if (maximized)
+            {
+                // Keep the previous restore rectangle: the maximized bounds are not useful to reopen into.
+                WindowPlacement existing = SettingsStore.Current.Window ?? new WindowPlacement();
+                existing.Maximized = true;
+                SettingsStore.Current.Window = existing;
+            }
+            else
+            {
+                SettingsStore.Current.Window = new WindowPlacement
+                {
+                    X = AppWindow.Position.X,
+                    Y = AppWindow.Position.Y,
+                    Width = AppWindow.Size.Width,
+                    Height = AppWindow.Size.Height,
+                    Maximized = false,
+                };
+            }
+
+            SettingsStore.Save();
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or ArgumentException)
+        {
+            // not worth failing a close over
+        }
+    }
+
+    // ----- Input -----
 
     private void WireInput()
     {
@@ -83,11 +159,26 @@ public sealed partial class MainWindow : Window
             ? DataPackageOperation.Link
             : DataPackageOperation.None;
         Root.Drop += OnDrop;
+        Root.PointerMoved += OnRootPointerMoved;
 
         AddAccelerator(VirtualKey.O, VirtualKeyModifiers.Control, (sender, e) => { _ = OpenWithPickerAsync(); e.Handled = true; });
         AddAccelerator(VirtualKey.W, VirtualKeyModifiers.Control, (_, e) => { CloseCurrentTab(); e.Handled = true; });
         AddAccelerator(VirtualKey.Tab, VirtualKeyModifiers.Control, (_, e) => { CycleTab(+1); e.Handled = true; });
         AddAccelerator(VirtualKey.Tab, VirtualKeyModifiers.Control | VirtualKeyModifiers.Shift, (_, e) => { CycleTab(-1); e.Handled = true; });
+
+        // F11 is the Windows-wide convention; Ctrl+L matches Acrobat. Ctrl+F stays Find.
+        AddAccelerator(VirtualKey.F11, VirtualKeyModifiers.None, (_, e) => { ToggleFullScreen(); e.Handled = true; });
+        AddAccelerator(VirtualKey.L, VirtualKeyModifiers.Control, (_, e) => { ToggleFullScreen(); e.Handled = true; });
+
+        // Only claims Escape when full screen is actually on, so the viewer keeps it for the find bar and selection.
+        AddAccelerator(VirtualKey.Escape, VirtualKeyModifiers.None, (_, e) =>
+        {
+            if (_fullScreen)
+            {
+                SetFullScreen(false);
+                e.Handled = true;
+            }
+        });
     }
 
     private void AddAccelerator(VirtualKey key, VirtualKeyModifiers modifiers, TypedEventHandler<KeyboardAccelerator, KeyboardAcceleratorInvokedEventArgs> handler)
@@ -95,6 +186,66 @@ public sealed partial class MainWindow : Window
         var accelerator = new KeyboardAccelerator { Key = key, Modifiers = modifiers };
         accelerator.Invoked += handler;
         Root.KeyboardAccelerators.Add(accelerator);
+    }
+
+    // ----- Full screen -----
+
+    public bool IsFullScreen => _fullScreen;
+
+    public void ToggleFullScreen() => SetFullScreen(!_fullScreen);
+
+    private void SetFullScreen(bool on)
+    {
+        if (on == _fullScreen)
+        {
+            return;
+        }
+
+        try
+        {
+            AppWindow.SetPresenter(on ? AppWindowPresenterKind.FullScreen : AppWindowPresenterKind.Default);
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or ArgumentException or NotSupportedException)
+        {
+            ShowError("Full screen is unavailable", ex.Message);
+            return;
+        }
+
+        _fullScreen = on;
+        _chromeRevealed = false;
+        ApplyChrome();
+
+        FullScreenHint.IsOpen = on;
+        FullScreenMenuItem.Text = on ? "Exit full screen" : "Full screen";
+        CurrentViewer?.Focus(FocusState.Programmatic);
+    }
+
+    /// <summary>Hides the tab strip and the viewer toolbar in full screen, unless the pointer has revealed them.</summary>
+    private void ApplyChrome()
+    {
+        bool visible = !_fullScreen || _chromeRevealed;
+        TitleBarArea.Visibility = visible ? Visibility.Visible : Visibility.Collapsed;
+        foreach (TabViewItem item in Tabs.TabItems.OfType<TabViewItem>())
+        {
+            (item.Tag as DocumentTab)?.Viewer.SetToolbarVisible(visible);
+        }
+    }
+
+    private void OnRootPointerMoved(object sender, PointerRoutedEventArgs e)
+    {
+        if (!_fullScreen)
+        {
+            return;
+        }
+
+        // A wider band keeps the chrome up once shown, so it does not flicker while the pointer travels to a button.
+        double y = e.GetCurrentPoint(Root).Position.Y;
+        bool reveal = y <= (_chromeRevealed ? RevealKeepDip : RevealEdgeDip);
+        if (reveal != _chromeRevealed)
+        {
+            _chromeRevealed = reveal;
+            ApplyChrome();
+        }
     }
 
     // ----- Public API used by App -----
@@ -150,6 +301,8 @@ public sealed partial class MainWindow : Window
         }
 
         await viewer.LoadAsync(session);
+        viewer.SetToolbarVisible(!_fullScreen || _chromeRevealed);
+        RecentFiles.Add(path);
         UpdateTitle();
         _ = TestAutomation.RunIfRequestedAsync(viewer);
     }
@@ -242,9 +395,11 @@ public sealed partial class MainWindow : Window
         var text = new TextBlock
         {
             TextWrapping = TextWrapping.Wrap,
-            Text = $"Leaf {typeof(MainWindow).Assembly.GetName().Version?.ToString(3) ?? "0.1"}\n\nA light, fast PDF reader for Windows.\n\n" +
+            Text = $"Leaf {typeof(MainWindow).Assembly.GetName().Version?.ToString(3) ?? "0.2"}\n\nA light, fast PDF reader for Windows.\n\n" +
                    "Rendering: PDFium (Apache License 2.0)\nUI: Windows App SDK / WinUI 3\nRuntime: .NET (Native AOT)\n\n" +
-                   "Shortcuts: Ctrl+O open, Ctrl+W close tab, Ctrl+F find, F3 next, Ctrl+G go to page, Ctrl+wheel / Ctrl+= / Ctrl+- zoom, Ctrl+0 fit width, Ctrl+Shift+R rotate, Ctrl+A select page, Ctrl+C copy.",
+                   "Files: Ctrl+O open, Ctrl+W close tab.\n" +
+                   "Reading: Ctrl+F find, F3 next, Ctrl+G go to page, Ctrl+wheel zoom, Ctrl+0 fit width, Ctrl+A select page, Ctrl+C copy.\n" +
+                   "View: F11 or Ctrl+L full screen, Esc to leave, Ctrl+Shift+R / Ctrl+Shift+L rotate.",
         };
         var dialog = new ContentDialog
         {
@@ -256,6 +411,88 @@ public sealed partial class MainWindow : Window
         await dialog.ShowAsync();
     }
 
+    // ----- App menu -----
+
+    /// <summary>
+    /// Builds the volatile parts of the menu as it opens. Doing it here rather than at startup keeps the
+    /// settings file and the disk checks off the launch path.
+    /// </summary>
+    private void OnAppMenuOpening(object? sender, object e)
+    {
+        bool hasDocument = CurrentViewer?.Session is not null;
+        PropertiesMenuItem.IsEnabled = hasDocument;
+        FullScreenMenuItem.Text = _fullScreen ? "Exit full screen" : "Full screen";
+        BuildRecentMenu();
+    }
+
+    private void BuildRecentMenu()
+    {
+        RecentMenu.Items.Clear();
+        IReadOnlyList<RecentEntry> entries = RecentFiles.Entries;
+        if (entries.Count == 0)
+        {
+            RecentMenu.Items.Add(new MenuFlyoutItem { Text = "No recent files", IsEnabled = false });
+            return;
+        }
+
+        foreach (RecentEntry entry in entries)
+        {
+            bool exists = RecentFiles.Exists(entry);
+            string path = entry.Path;
+            var item = new MenuFlyoutItem
+            {
+                Text = Path.GetFileName(path),
+                Opacity = exists ? 1 : 0.5, // a moved file is worth still seeing
+            };
+            ToolTipService.SetToolTip(item, exists ? path : $"{path}\n\nThis file is no longer there.");
+            item.Click += (_, _) =>
+            {
+                if (RecentFiles.Exists(entry))
+                {
+                    OpenFile(path);
+                }
+                else
+                {
+                    RecentFiles.Remove(path);
+                    ShowError("That file has moved", $"{path} is no longer there, so it was removed from the recent list.");
+                }
+            };
+            RecentMenu.Items.Add(item);
+        }
+
+        RecentMenu.Items.Add(new MenuFlyoutSeparator());
+        var clear = new MenuFlyoutItem { Text = "Clear recent files" };
+        clear.Click += (_, _) => RecentFiles.Clear();
+        RecentMenu.Items.Add(clear);
+    }
+
+    private void OnPrintClick(object sender, RoutedEventArgs e)
+    {
+        // Reachable only if the item is ever enabled; printing arrives in 0.3.0.
+        ShowError("Printing is not ready yet", "Printing arrives in Leaf 0.3.0.");
+    }
+
+    private async void OnPropertiesClick(object sender, RoutedEventArgs e)
+    {
+        ViewerControl? viewer = CurrentViewer;
+        if (viewer?.Session is not DocumentSession session)
+        {
+            return;
+        }
+
+        await WhenLoadedAsync();
+        try
+        {
+            await DocumentPropertiesDialog.ShowAsync(Content.XamlRoot, session, viewer.CurrentPage);
+        }
+        catch (PdfException ex)
+        {
+            ShowError("Can't read the document properties", ex.Message);
+        }
+    }
+
+    private void OnFullScreenClick(object sender, RoutedEventArgs e) => ToggleFullScreen();
+
     // ----- Handlers -----
 
     private async void OnOpenClick(object sender, RoutedEventArgs e) => await OpenWithPickerAsync();
@@ -264,19 +501,9 @@ public sealed partial class MainWindow : Window
 
     private async Task OpenWithPickerAsync()
     {
-        var picker = new FileOpenPicker
+        foreach (string path in await FileDialogs.PickPdfsAsync(this))
         {
-            ViewMode = PickerViewMode.List,
-            SuggestedStartLocation = PickerLocationId.DocumentsLibrary,
-        };
-        picker.FileTypeFilter.Add(".pdf");
-        nint hwnd = WinRT.Interop.WindowNative.GetWindowHandle(this);
-        WinRT.Interop.InitializeWithWindow.Initialize(picker, hwnd);
-
-        IReadOnlyList<StorageFile> files = await picker.PickMultipleFilesAsync();
-        foreach (StorageFile file in files)
-        {
-            OpenFile(file.Path);
+            OpenFile(path);
         }
     }
 
@@ -289,7 +516,7 @@ public sealed partial class MainWindow : Window
 
         foreach (IStorageItem item in await e.DataView.GetStorageItemsAsync())
         {
-            if (item is StorageFile file && file.FileType.Equals(".pdf", StringComparison.OrdinalIgnoreCase))
+            if (item is StorageFile file && FileDialogs.IsPdf(file.Path))
             {
                 OpenFile(file.Path);
             }
@@ -320,7 +547,8 @@ public sealed partial class MainWindow : Window
         if (Tabs.SelectedItem is TabViewItem { Tag: DocumentTab doc })
         {
             int pages = doc.Viewer.PageCount;
-            Title = pages > 0 ? $"{Path.GetFileName(doc.Path)} ({doc.Viewer.CurrentPage + 1}/{pages}) - Leaf" : $"{Path.GetFileName(doc.Path)} - Leaf";
+            string name = Path.GetFileName(doc.Path);
+            Title = pages > 0 ? $"{name} ({doc.Viewer.CurrentPage + 1}/{pages}) - Leaf" : $"{name} - Leaf";
         }
         else
         {

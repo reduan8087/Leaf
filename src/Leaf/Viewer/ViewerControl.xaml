@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="utf-8"?>
+﻿<?xml version="1.0" encoding="utf-8"?>
 <UserControl
     x:Class="Leaf.Viewer.ViewerControl"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
@@ -29,7 +29,7 @@
         </Grid.RowDefinitions>
 
         <!-- Toolbar -->
-        <Grid Grid.Row="0" Padding="8,4" Background="{ThemeResource LayerFillColorDefaultBrush}" BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}" BorderThickness="0,0,0,1">
+        <Grid x:Name="Toolbar" Grid.Row="0" Padding="8,4" Background="{ThemeResource LayerFillColorDefaultBrush}" BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}" BorderThickness="0,0,0,1">
             <StackPanel Orientation="Horizontal" Spacing="2" HorizontalAlignment="Center">
                 <Button x:Name="PrevPageButton" Style="{StaticResource ToolButton}" Click="OnPrevPage" ToolTipService.ToolTip="Previous page (Page Up)">
                     <FontIcon Glyph="&#xE70E;" FontSize="14" />

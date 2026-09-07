@@ -1,4 +1,4 @@
-using System.Diagnostics.CodeAnalysis;
+﻿using System.Diagnostics.CodeAnalysis;
 using Leaf.Pdfium.Native;
 
 namespace Leaf.Pdfium;

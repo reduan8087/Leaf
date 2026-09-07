@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="utf-8"?>
+﻿<?xml version="1.0" encoding="utf-8"?>
 <Window
     x:Class="Leaf.MainWindow"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
@@ -13,7 +13,7 @@
             <RowDefinition Height="*" />
         </Grid.RowDefinitions>
 
-        <!-- Title bar strip: app icon, tabs, then a draggable spacer; caption buttons are drawn by the system on the right. -->
+        <!-- Title bar strip: app menu, tabs, then a draggable spacer; caption buttons are drawn by the system on the right. -->
         <Grid x:Name="TitleBarArea" Grid.Row="0" Height="40">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="Auto" />
@@ -21,21 +21,46 @@
                 <ColumnDefinition x:Name="CaptionSpacer" Width="140" />
             </Grid.ColumnDefinitions>
 
-            <Button x:Name="AppMenuButton" Grid.Column="0" Margin="6,0,2,0" Padding="6" VerticalAlignment="Center"
-                    Background="Transparent" BorderThickness="0" ToolTipService.ToolTip="Leaf menu">
-                <Image x:Name="AppIcon" Width="16" Height="16" />
+            <Button x:Name="AppMenuButton" Grid.Column="0" Margin="6,0,2,0" Padding="8,6" VerticalAlignment="Center"
+                    Background="Transparent" BorderThickness="0"
+                    AccessKey="F" AutomationProperties.Name="Leaf menu"
+                    ToolTipService.ToolTip="Menu (Alt+F)">
+                <FontIcon Glyph="&#xE700;" FontSize="16" />
                 <Button.Flyout>
-                    <MenuFlyout Placement="BottomEdgeAlignedLeft">
+                    <MenuFlyout Placement="BottomEdgeAlignedLeft" Opening="OnAppMenuOpening">
                         <MenuFlyoutItem Text="Open…" Click="OnOpenClick">
                             <MenuFlyoutItem.KeyboardAcceleratorTextOverride>Ctrl+O</MenuFlyoutItem.KeyboardAcceleratorTextOverride>
                             <MenuFlyoutItem.Icon><FontIcon Glyph="&#xE8E5;" /></MenuFlyoutItem.Icon>
                         </MenuFlyoutItem>
+                        <MenuFlyoutSubItem x:Name="RecentMenu" Text="Open Recent">
+                            <MenuFlyoutSubItem.Icon><FontIcon Glyph="&#xE81C;" /></MenuFlyoutSubItem.Icon>
+                        </MenuFlyoutSubItem>
+
+                        <MenuFlyoutSeparator />
+
+                        <!-- Printing lands in 0.3.0; the item stays visible so the gap is obvious rather than mysterious. -->
+                        <MenuFlyoutItem x:Name="PrintMenuItem" Text="Print…" IsEnabled="False" Click="OnPrintClick">
+                            <MenuFlyoutItem.KeyboardAcceleratorTextOverride>Ctrl+P</MenuFlyoutItem.KeyboardAcceleratorTextOverride>
+                            <MenuFlyoutItem.Icon><FontIcon Glyph="&#xE749;" /></MenuFlyoutItem.Icon>
+                        </MenuFlyoutItem>
+                        <MenuFlyoutItem x:Name="PropertiesMenuItem" Text="Document Properties…" Click="OnPropertiesClick">
+                            <MenuFlyoutItem.Icon><FontIcon Glyph="&#xE946;" /></MenuFlyoutItem.Icon>
+                        </MenuFlyoutItem>
+
+                        <MenuFlyoutSeparator />
+
+                        <MenuFlyoutItem x:Name="FullScreenMenuItem" Text="Full screen" Click="OnFullScreenClick">
+                            <MenuFlyoutItem.KeyboardAcceleratorTextOverride>F11</MenuFlyoutItem.KeyboardAcceleratorTextOverride>
+                            <MenuFlyoutItem.Icon><FontIcon Glyph="&#xE740;" /></MenuFlyoutItem.Icon>
+                        </MenuFlyoutItem>
+
+                        <MenuFlyoutSeparator />
+
                         <MenuFlyoutItem Text="Make Leaf the default PDF app…" Click="OnSetDefaultClick">
                             <MenuFlyoutItem.Icon><FontIcon Glyph="&#xE73E;" /></MenuFlyoutItem.Icon>
                         </MenuFlyoutItem>
-                        <MenuFlyoutSeparator />
                         <MenuFlyoutItem Text="About Leaf" Click="OnAboutClick">
-                            <MenuFlyoutItem.Icon><FontIcon Glyph="&#xE946;" /></MenuFlyoutItem.Icon>
+                            <MenuFlyoutItem.Icon><FontIcon Glyph="&#xE897;" /></MenuFlyoutItem.Icon>
                         </MenuFlyoutItem>
                     </MenuFlyout>
                 </Button.Flyout>
@@ -65,6 +90,12 @@
                 <TextBlock Text="or drop a file anywhere in this window" Style="{ThemeResource CaptionTextBlockStyle}" HorizontalAlignment="Center" Opacity="0.7" />
             </StackPanel>
             <ContentPresenter x:Name="TabContent" />
+
+            <!-- Full screen: a one-off hint, dismissed by itself or by any of the exit keys. -->
+            <InfoBar x:Name="FullScreenHint" IsOpen="False" IsClosable="True" Severity="Informational"
+                     VerticalAlignment="Top" HorizontalAlignment="Center" Margin="0,16,0,0"
+                     Title="Full screen"
+                     Message="Press F11, Ctrl+L or Esc to leave. Move the pointer to the top edge for the toolbar." />
         </Grid>
     </Grid>
 </Window>

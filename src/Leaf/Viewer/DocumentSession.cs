@@ -1,4 +1,4 @@
-using Leaf.Pdfium;
+﻿using Leaf.Pdfium;
 
 namespace Leaf.Viewer;
 
@@ -15,14 +15,21 @@ public sealed class DocumentSession : IDisposable
     {
         Path = path;
         Document = document;
-        Pages = document.Pages;
     }
 
     public string Path { get; }
     public string FileName => System.IO.Path.GetFileName(Path);
     public PdfDocument Document { get; }
-    public IReadOnlyList<PdfPageInfo> Pages { get; }
+
+    /// <summary>Read straight from the document: a structural edit replaces the whole array, so a snapshot here would go stale.</summary>
+    public IReadOnlyList<PdfPageInfo> Pages => Document.Pages;
     public int PageCount => Pages.Count;
+
+    /// <summary>True when pages have been rotated, reordered or deleted without being saved yet.</summary>
+    public bool IsModified => Document.IsModified;
+
+    /// <summary>Drops per-page caches after a structural edit moved or removed pages.</summary>
+    public void InvalidateAfterEdit() => _textLayouts.Clear();
 
     public static async Task<DocumentSession> OpenAsync(string path, string? password = null)
     {

@@ -1,4 +1,4 @@
-using Leaf.Pdfium;
+﻿using Leaf.Pdfium;
 
 using Microsoft.UI.Input;
 using Microsoft.UI.Xaml;
@@ -646,6 +646,9 @@ public sealed partial class ViewerControl : UserControl, IDisposable
 
     public bool CanScrollDown => Scroller.VerticalOffset < Scroller.ScrollableHeight - 1;
 
+    /// <summary>Hides the toolbar in full screen; the window reveals it again near the top edge.</summary>
+    public void SetToolbarVisible(bool visible) => Toolbar.Visibility = visible ? Visibility.Visible : Visibility.Collapsed;
+
     public void FitWidth()
     {
         _zoomMode = ZoomMode.FitWidth;
@@ -851,9 +854,13 @@ public sealed partial class ViewerControl : UserControl, IDisposable
                 {
                     HideFind();
                 }
-                else
+                else if (HasSelection)
                 {
                     ClearSelection();
+                }
+                else
+                {
+                    return; // nothing to dismiss here: let the window leave full screen
                 }
 
                 break;
