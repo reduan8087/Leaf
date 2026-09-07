@@ -76,6 +76,32 @@ public sealed unsafe class PdfBuilder : IDisposable
         }
     }
 
+    /// <summary>Sets a page's /Rotate, so an extracted selection keeps the rotation it was shown with.</summary>
+    public void SetPageRotation(int pageIndex, int quarterTurns)
+    {
+        PdfiumThread.AssertCurrent();
+        ThrowIfDisposed();
+        if ((uint)pageIndex >= (uint)PageCount)
+        {
+            throw new ArgumentOutOfRangeException(nameof(pageIndex));
+        }
+
+        nint page = NativeMethods.FPDF_LoadPage(_doc, pageIndex);
+        if (page == 0)
+        {
+            throw new PdfException(PdfError.Page, $"Page {pageIndex + 1} could not be opened to rotate it.");
+        }
+
+        try
+        {
+            NativeMethods.FPDFPage_SetRotation(page, quarterTurns & 3);
+        }
+        finally
+        {
+            NativeMethods.FPDF_ClosePage(page);
+        }
+    }
+
     /// <summary>Copies the reading preferences (page layout, page mode) of a source document onto the result.</summary>
     public void CopyViewerPreferencesFrom(PdfDocument source)
     {

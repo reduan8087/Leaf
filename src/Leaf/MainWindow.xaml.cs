@@ -35,6 +35,7 @@ public sealed partial class MainWindow : Window
         SetUpTitleBar();
         RestoreWindowPlacement();
         WireInput();
+        AppWindow.Closing += OnAppWindowClosing;
         Closed += (_, _) =>
         {
             RememberWindowPlacement();
@@ -48,6 +49,7 @@ public sealed partial class MainWindow : Window
         {
             _loaded.TrySetResult();
             MaybeOfferDefaultApp();
+            ScratchFiles.SweepOldFiles();
         };
     }
 
@@ -163,6 +165,10 @@ public sealed partial class MainWindow : Window
 
         AddAccelerator(VirtualKey.O, VirtualKeyModifiers.Control, (sender, e) => { _ = OpenWithPickerAsync(); e.Handled = true; });
         AddAccelerator(VirtualKey.W, VirtualKeyModifiers.Control, (_, e) => { CloseCurrentTab(); e.Handled = true; });
+        AddAccelerator(VirtualKey.S, VirtualKeyModifiers.Control, (_, e) => { OnSaveClick(this, new RoutedEventArgs()); e.Handled = true; });
+        AddAccelerator(VirtualKey.S, VirtualKeyModifiers.Control | VirtualKeyModifiers.Shift, (_, e) => { OnSaveAsClick(this, new RoutedEventArgs()); e.Handled = true; });
+        AddAccelerator(VirtualKey.O, VirtualKeyModifiers.Control | VirtualKeyModifiers.Shift, (_, e) => { OnOrganizeClick(this, new RoutedEventArgs()); e.Handled = true; });
+        AddAccelerator(VirtualKey.M, VirtualKeyModifiers.Control | VirtualKeyModifiers.Shift, (_, e) => { OnCombineClick(this, new RoutedEventArgs()); e.Handled = true; });
         AddAccelerator(VirtualKey.Tab, VirtualKeyModifiers.Control, (_, e) => { CycleTab(+1); e.Handled = true; });
         AddAccelerator(VirtualKey.Tab, VirtualKeyModifiers.Control | VirtualKeyModifiers.Shift, (_, e) => { CycleTab(-1); e.Handled = true; });
 
@@ -275,19 +281,22 @@ public sealed partial class MainWindow : Window
         }
 
         var viewer = new ViewerControl();
-        var docTab = new DocumentTab(path, viewer);
+        var docTab = new DocumentTab(path, viewer, untitled: false, displayName: Path.GetFileName(path));
         var tab = new TabViewItem
         {
-            Header = Path.GetFileName(path),
+            Header = docTab.DisplayName,
             Tag = docTab,
             IconSource = new SymbolIconSource { Symbol = Symbol.Document },
         };
+        docTab.Tab = tab;
         ToolTipService.SetToolTip(tab, path);
         Tabs.TabItems.Add(tab);
         Tabs.SelectedItem = tab;
         viewer.StateChanged += _ => UpdateTitle();
         viewer.FullScreenRequested += ToggleFullScreen;
-        viewer.Reopen = () => OpenSessionAsync(path, closeTabOnFailure: null);
+
+        // Reads the path from the tab, so Save As can move the document onto a different file.
+        viewer.Reopen = () => OpenSessionAsync(docTab.Path, closeTabOnFailure: null);
 
         DocumentSession? session = await OpenSessionAsync(path, closeTabOnFailure: tab);
         if (session is null)
@@ -305,7 +314,7 @@ public sealed partial class MainWindow : Window
         viewer.SetToolbarVisible(!_fullScreen || _chromeRevealed);
         RecentFiles.Add(path);
         UpdateTitle();
-        _ = TestAutomation.RunIfRequestedAsync(viewer);
+        _ = TestAutomation.RunIfRequestedAsync(viewer, this);
     }
 
     /// <summary>Opens a session, prompting for a password as needed. Returns null when cancelled or failed (error shown).</summary>
@@ -424,6 +433,13 @@ public sealed partial class MainWindow : Window
         bool hasDocument = viewer?.Session is not null;
         PropertiesMenuItem.IsEnabled = hasDocument;
         ViewMenu.IsEnabled = hasDocument;
+
+        DocumentTab? document = CurrentDocument;
+        bool modified = document?.IsModified ?? false;
+        SaveMenuItem.IsEnabled = modified;
+        SaveAsMenuItem.IsEnabled = hasDocument;
+        OrganizeMenuItem.IsEnabled = hasDocument && !IsOrganizing;
+        RevertMenuItem.IsEnabled = modified && document?.IsUntitled == false;
         FullScreenMenuItem.Text = _fullScreen ? "Exit full screen" : "Full screen";
         SyncViewMenu(viewer);
         BuildRecentMenu();
@@ -574,7 +590,18 @@ public sealed partial class MainWindow : Window
         }
     }
 
-    private void OnTabCloseRequested(TabView sender, TabViewTabCloseRequestedEventArgs args) => CloseTab(args.Tab);
+    private async void OnTabCloseRequested(TabView sender, TabViewTabCloseRequestedEventArgs args)
+    {
+        if (args.Tab.Tag is DocumentTab doc && doc.IsModified)
+        {
+            if (!await ConfirmCloseAsync(doc))
+            {
+                return;
+            }
+        }
+
+        CloseTab(args.Tab);
+    }
 
     private void OnTabSelectionChanged(object sender, SelectionChangedEventArgs e)
     {
@@ -598,7 +625,7 @@ public sealed partial class MainWindow : Window
         if (Tabs.SelectedItem is TabViewItem { Tag: DocumentTab doc })
         {
             int pages = doc.Viewer.PageCount;
-            string name = Path.GetFileName(doc.Path);
+            string name = doc.IsModified ? $"{doc.DisplayName} •" : doc.DisplayName;
             Title = pages > 0 ? $"{name} ({doc.Viewer.CurrentPage + 1}/{pages}) - Leaf" : $"{name} - Leaf";
         }
         else
@@ -607,12 +634,19 @@ public sealed partial class MainWindow : Window
         }
     }
 
-    private void CloseCurrentTab()
+    private async void CloseCurrentTab()
     {
-        if (Tabs.SelectedItem is TabViewItem tab)
+        if (Tabs.SelectedItem is not TabViewItem tab)
         {
-            CloseTab(tab);
+            return;
         }
+
+        if (tab.Tag is DocumentTab doc && !await ConfirmCloseAsync(doc))
+        {
+            return;
+        }
+
+        CloseTab(tab);
     }
 
     private void CloseTab(TabViewItem tab)
@@ -627,6 +661,10 @@ public sealed partial class MainWindow : Window
             }
 
             doc.Viewer.Dispose();
+            if (doc.IsUntitled)
+            {
+                ScratchFiles.TryDelete(doc.Path);
+            }
         }
     }
 
@@ -640,6 +678,4 @@ public sealed partial class MainWindow : Window
 
         Tabs.SelectedIndex = (Tabs.SelectedIndex + delta + count) % count;
     }
-
-    private sealed record DocumentTab(string Path, ViewerControl Viewer);
 }

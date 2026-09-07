@@ -251,6 +251,9 @@ public sealed unsafe partial class PdfDocument
         }
     }
 
+    /// <summary>Flags the document as needing to be saved. Used for a combined document, which is born unsaved.</summary>
+    public void MarkModified() => IsModified = true;
+
     /// <summary>Clears <see cref="IsModified"/> once the caller has persisted the document.</summary>
     public void MarkSaved() => IsModified = false;
 

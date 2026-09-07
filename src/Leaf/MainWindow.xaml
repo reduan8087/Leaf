@@ -38,6 +38,31 @@
 
                         <MenuFlyoutSeparator />
 
+                        <MenuFlyoutItem x:Name="SaveMenuItem" Text="Save" IsEnabled="False" Click="OnSaveClick">
+                            <MenuFlyoutItem.KeyboardAcceleratorTextOverride>Ctrl+S</MenuFlyoutItem.KeyboardAcceleratorTextOverride>
+                            <MenuFlyoutItem.Icon><FontIcon Glyph="&#xE74E;" /></MenuFlyoutItem.Icon>
+                        </MenuFlyoutItem>
+                        <MenuFlyoutItem x:Name="SaveAsMenuItem" Text="Save As…" IsEnabled="False" Click="OnSaveAsClick">
+                            <MenuFlyoutItem.KeyboardAcceleratorTextOverride>Ctrl+Shift+S</MenuFlyoutItem.KeyboardAcceleratorTextOverride>
+                            <MenuFlyoutItem.Icon><FontIcon Glyph="&#xE792;" /></MenuFlyoutItem.Icon>
+                        </MenuFlyoutItem>
+                        <MenuFlyoutItem x:Name="RevertMenuItem" Text="Revert" IsEnabled="False" Click="OnRevertClick">
+                            <MenuFlyoutItem.Icon><FontIcon Glyph="&#xE7A7;" /></MenuFlyoutItem.Icon>
+                        </MenuFlyoutItem>
+
+                        <MenuFlyoutSeparator />
+
+                        <MenuFlyoutItem x:Name="CombineMenuItem" Text="Combine Files…" Click="OnCombineClick">
+                            <MenuFlyoutItem.KeyboardAcceleratorTextOverride>Ctrl+Shift+M</MenuFlyoutItem.KeyboardAcceleratorTextOverride>
+                            <MenuFlyoutItem.Icon><FontIcon Glyph="&#xE8C4;" /></MenuFlyoutItem.Icon>
+                        </MenuFlyoutItem>
+                        <MenuFlyoutItem x:Name="OrganizeMenuItem" Text="Organize Pages…" IsEnabled="False" Click="OnOrganizeClick">
+                            <MenuFlyoutItem.KeyboardAcceleratorTextOverride>Ctrl+Shift+O</MenuFlyoutItem.KeyboardAcceleratorTextOverride>
+                            <MenuFlyoutItem.Icon><FontIcon Glyph="&#xE8FD;" /></MenuFlyoutItem.Icon>
+                        </MenuFlyoutItem>
+
+                        <MenuFlyoutSeparator />
+
                         <!-- Printing lands in 0.3.0; the item stays visible so the gap is obvious rather than mysterious. -->
                         <MenuFlyoutItem x:Name="PrintMenuItem" Text="Print…" IsEnabled="False" Click="OnPrintClick">
                             <MenuFlyoutItem.KeyboardAcceleratorTextOverride>Ctrl+P</MenuFlyoutItem.KeyboardAcceleratorTextOverride>
@@ -127,6 +152,9 @@
                 <TextBlock Text="or drop a file anywhere in this window" Style="{ThemeResource CaptionTextBlockStyle}" HorizontalAlignment="Center" Opacity="0.7" />
             </StackPanel>
             <ContentPresenter x:Name="TabContent" />
+
+            <!-- Organize Pages takes over the whole content area; the viewer stays loaded underneath. -->
+            <ContentPresenter x:Name="OrganizeHost" Visibility="Collapsed" />
 
             <!-- Full screen: a one-off hint, dismissed by itself or by any of the exit keys. -->
             <InfoBar x:Name="FullScreenHint" IsOpen="False" IsClosable="True" Severity="Informational"

@@ -1,0 +1,146 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<UserControl
+    x:Class="Leaf.Organize.OrganizePagesView"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:organize="using:Leaf.Organize"
+    IsTabStop="True">
+
+    <UserControl.Resources>
+        <Style x:Key="OrganizeButton" TargetType="Button">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Padding" Value="10,6" />
+        </Style>
+    </UserControl.Resources>
+
+    <Grid x:Name="Root">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <!-- Command bar -->
+        <Grid Grid.Row="0" Padding="12,8" ColumnSpacing="8"
+              Background="{ThemeResource LayerFillColorDefaultBrush}"
+              BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}" BorderThickness="0,0,0,1">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+
+            <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="2" VerticalAlignment="Center">
+                <TextBlock Text="Organize pages" Style="{ThemeResource SubtitleTextBlockStyle}" VerticalAlignment="Center" Margin="0,0,16,0" />
+
+                <Button x:Name="RotateLeftButton" Style="{StaticResource OrganizeButton}" Click="OnRotateLeft" ToolTipService.ToolTip="Rotate left">
+                    <FontIcon Glyph="&#xE7A7;" FontSize="14" />
+                </Button>
+                <Button x:Name="RotateRightButton" Style="{StaticResource OrganizeButton}" Click="OnRotateRight" ToolTipService.ToolTip="Rotate right">
+                    <FontIcon Glyph="&#xE7AD;" FontSize="14" />
+                </Button>
+                <Button x:Name="DeleteButton" Style="{StaticResource OrganizeButton}" Click="OnDelete" ToolTipService.ToolTip="Delete selected pages (Delete)">
+                    <FontIcon Glyph="&#xE74D;" FontSize="14" />
+                </Button>
+
+                <AppBarSeparator Margin="6,0" />
+
+                <Button x:Name="MoveStartButton" Style="{StaticResource OrganizeButton}" Click="OnMoveToStart" ToolTipService.ToolTip="Move to the start">
+                    <FontIcon Glyph="&#xE892;" FontSize="14" />
+                </Button>
+                <Button x:Name="MoveEndButton" Style="{StaticResource OrganizeButton}" Click="OnMoveToEnd" ToolTipService.ToolTip="Move to the end">
+                    <FontIcon Glyph="&#xE893;" FontSize="14" />
+                </Button>
+
+                <AppBarSeparator Margin="6,0" />
+
+                <Button x:Name="InsertButton" Style="{StaticResource OrganizeButton}" Click="OnInsert" ToolTipService.ToolTip="Insert pages from another PDF">
+                    <StackPanel Orientation="Horizontal" Spacing="6">
+                        <FontIcon Glyph="&#xE710;" FontSize="14" />
+                        <TextBlock Text="Insert" />
+                    </StackPanel>
+                </Button>
+                <Button x:Name="ExtractButton" Style="{StaticResource OrganizeButton}" Click="OnExtract" ToolTipService.ToolTip="Save the selected pages as a new PDF">
+                    <StackPanel Orientation="Horizontal" Spacing="6">
+                        <FontIcon Glyph="&#xEDE1;" FontSize="14" />
+                        <TextBlock Text="Extract" />
+                    </StackPanel>
+                </Button>
+
+                <AppBarSeparator Margin="6,0" />
+
+                <Button x:Name="UndoButton" Style="{StaticResource OrganizeButton}" Click="OnUndo" ToolTipService.ToolTip="Undo (Ctrl+Z)">
+                    <TextBlock Text="Undo" />
+                </Button>
+                <Button x:Name="RedoButton" Style="{StaticResource OrganizeButton}" Click="OnRedo" ToolTipService.ToolTip="Redo (Ctrl+Y)">
+                    <TextBlock Text="Redo" />
+                </Button>
+            </StackPanel>
+
+            <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="12" VerticalAlignment="Center">
+                <FontIcon Glyph="&#xE71F;" FontSize="12" Opacity="0.7" VerticalAlignment="Center" />
+                <Slider x:Name="SizeSlider" Width="120" Minimum="110" Maximum="270" StepFrequency="40"
+                        SnapsTo="StepValues" Value="150" TickPlacement="None" VerticalAlignment="Center"
+                        ValueChanged="OnSizeChanged" ToolTipService.ToolTip="Thumbnail size" />
+                <FontIcon Glyph="&#xE8A3;" FontSize="12" Opacity="0.7" VerticalAlignment="Center" />
+            </StackPanel>
+        </Grid>
+
+        <!-- The grid itself. GridView gives drag-reorder with a drop indicator and range selection for free. -->
+        <GridView x:Name="PagesGrid" Grid.Row="1" Padding="16"
+                  SelectionMode="Extended"
+                  CanReorderItems="True" AllowDrop="True" CanDragItems="True"
+                  IsItemClickEnabled="False"
+                  SelectionChanged="OnSelectionChanged"
+                  Background="{ThemeResource SolidBackgroundFillColorSecondaryBrush}">
+            <GridView.ItemTemplate>
+                <DataTemplate x:DataType="organize:PageEditItem">
+                    <Grid Margin="6" Width="{x:Bind TileWidth, Mode=OneWay}">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="*" />
+                            <RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
+
+                        <Border Grid.Row="0" Height="{x:Bind TileHeight, Mode=OneWay}"
+                                Background="{ThemeResource SolidBackgroundFillColorBaseBrush}"
+                                BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}" BorderThickness="1"
+                                CornerRadius="2">
+                            <Image Source="{x:Bind Thumbnail, Mode=OneWay}" Stretch="Uniform" Margin="4" />
+                        </Border>
+
+                        <StackPanel Grid.Row="1" Orientation="Horizontal" Spacing="6" HorizontalAlignment="Center" Margin="0,6,0,0">
+                            <TextBlock Text="{x:Bind Label, Mode=OneWay}" Style="{ThemeResource CaptionTextBlockStyle}" />
+                            <FontIcon Glyph="&#xE895;" FontSize="10" Opacity="0.8"
+                                      Visibility="{x:Bind OriginVisibility}"
+                                      ToolTipService.ToolTip="{x:Bind Origin}" />
+                        </StackPanel>
+                    </Grid>
+                </DataTemplate>
+            </GridView.ItemTemplate>
+        </GridView>
+
+        <TextBlock x:Name="EmptyHint" Grid.Row="1" HorizontalAlignment="Center" VerticalAlignment="Center"
+                   Visibility="Collapsed" Opacity="0.7"
+                   Text="Every page has been removed. A document must keep at least one page." />
+
+        <!-- Footer -->
+        <Grid Grid.Row="2" Padding="12,10" ColumnSpacing="12"
+              Background="{ThemeResource LayerFillColorDefaultBrush}"
+              BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}" BorderThickness="0,1,0,0">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+
+            <TextBlock x:Name="StatusText" Grid.Column="0" VerticalAlignment="Center" Opacity="0.85" />
+
+            <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8">
+                <Button Content="Cancel" Click="OnCancel" MinWidth="90" />
+                <Button x:Name="DoneButton" Content="Done" Click="OnDone" MinWidth="90" Style="{ThemeResource AccentButtonStyle}" />
+            </StackPanel>
+        </Grid>
+
+        <ProgressRing x:Name="Busy" Grid.Row="1" IsActive="False" Width="40" Height="40" />
+    </Grid>
+</UserControl>

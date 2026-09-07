@@ -1,0 +1,107 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<UserControl
+    x:Class="Leaf.Dialogs.CombineFilesPanel"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:dialogs="using:Leaf.Dialogs"
+    Width="560" Height="440">
+
+    <Grid x:Name="Root" RowSpacing="10" AllowDrop="True" DragOver="OnDragOver" Drop="OnDrop">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <!-- Add / sort -->
+        <Grid Grid.Row="0" ColumnSpacing="8">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+
+            <Button Grid.Column="0" Click="OnAddFiles">
+                <StackPanel Orientation="Horizontal" Spacing="8">
+                    <FontIcon Glyph="&#xE710;" FontSize="14" />
+                    <TextBlock Text="Add files…" />
+                </StackPanel>
+            </Button>
+
+            <ComboBox Grid.Column="2" x:Name="SortBox" MinWidth="150" SelectionChanged="OnSortChanged"
+                      ToolTipService.ToolTip="Sort the list">
+                <ComboBoxItem Content="Manual order" IsSelected="True" />
+                <ComboBoxItem Content="Name" />
+                <ComboBoxItem Content="Date modified" />
+                <ComboBoxItem Content="Size" />
+                <ComboBoxItem Content="Folder" />
+            </ComboBox>
+            <Button Grid.Column="3" x:Name="SortDirectionButton" Click="OnToggleSortDirection"
+                    ToolTipService.ToolTip="Reverse the order">
+                <FontIcon x:Name="SortDirectionIcon" Glyph="&#xE74A;" FontSize="14" />
+            </Button>
+        </Grid>
+
+        <!-- The queue. Reorderable, which is how the user sets the order pages come out in. -->
+        <Border Grid.Row="1" BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}" BorderThickness="1" CornerRadius="4">
+            <Grid>
+                <ListView x:Name="FilesList" SelectionMode="Extended"
+                          CanReorderItems="True" AllowDrop="True" CanDragItems="True"
+                          SelectionChanged="OnSelectionChanged">
+                    <ListView.ItemTemplate>
+                        <DataTemplate x:DataType="dialogs:CombineItem">
+                            <Grid ColumnSpacing="12" Padding="0,6" Opacity="{x:Bind Opacity, Mode=OneWay}">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+
+                                <TextBlock Grid.Column="0" Text="{x:Bind Position, Mode=OneWay}" MinWidth="20"
+                                           TextAlignment="Right" Opacity="0.6" VerticalAlignment="Center" />
+                                <FontIcon Grid.Column="1" Glyph="{x:Bind Glyph}" FontSize="16" VerticalAlignment="Center" />
+                                <TextBlock Grid.Column="2" Text="{x:Bind Name}" VerticalAlignment="Center"
+                                           TextTrimming="CharacterEllipsis" ToolTipService.ToolTip="{x:Bind Path}" />
+                                <TextBlock Grid.Column="3" Text="{x:Bind Detail, Mode=OneWay}" VerticalAlignment="Center"
+                                           Opacity="0.7" Style="{ThemeResource CaptionTextBlockStyle}" />
+                            </Grid>
+                        </DataTemplate>
+                    </ListView.ItemTemplate>
+                </ListView>
+
+                <StackPanel x:Name="EmptyState" HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="6" IsHitTestVisible="False">
+                    <FontIcon Glyph="&#xE8DE;" FontSize="28" Opacity="0.45" />
+                    <TextBlock Text="Drop PDFs and images here" HorizontalAlignment="Center" Opacity="0.7" />
+                    <TextBlock Text="or use Add files" HorizontalAlignment="Center" Opacity="0.55"
+                               Style="{ThemeResource CaptionTextBlockStyle}" />
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <!-- Row commands -->
+        <StackPanel Grid.Row="2" Orientation="Horizontal" Spacing="8">
+            <Button x:Name="RemoveButton" Click="OnRemove" IsEnabled="False">
+                <StackPanel Orientation="Horizontal" Spacing="8">
+                    <FontIcon Glyph="&#xE738;" FontSize="14" />
+                    <TextBlock Text="Remove" />
+                </StackPanel>
+            </Button>
+            <Button x:Name="ClearButton" Content="Clear all" Click="OnClear" IsEnabled="False" />
+
+            <AppBarSeparator Margin="4,0" />
+
+            <TextBlock Text="Image pages:" VerticalAlignment="Center" Opacity="0.8" />
+            <ComboBox x:Name="ImageSizeBox" MinWidth="140" SelectionChanged="OnImageSizeChanged"
+                      ToolTipService.ToolTip="How images are sized when they become pages">
+                <ComboBoxItem Content="Match image" IsSelected="True" />
+                <ComboBoxItem Content="Fit to A4" />
+                <ComboBoxItem Content="Fit to Letter" />
+            </ComboBox>
+        </StackPanel>
+
+        <TextBlock x:Name="SummaryText" Grid.Row="3" Opacity="0.85" Text="No files yet" />
+    </Grid>
+</UserControl>

@@ -221,6 +221,53 @@ public sealed partial class ViewerControl
         GoToPage(_layout.PageByRowStep(CurrentPage, direction));
     }
 
+    // ------------------------------------------------------------------ after a page edit
+
+    /// <summary>
+    /// Rebuilds everything that depends on page indices after pages were rotated, reordered, deleted or
+    /// imported. Unlike <see cref="ReloadAsync"/> this keeps the open document, because the edits live in
+    /// memory and have not been written to the file yet.
+    /// </summary>
+    public void RefreshAfterEdit()
+    {
+        if (_disposed || _session is not DocumentSession session || _scheduler is null)
+        {
+            return;
+        }
+
+        // Every cached tile, highlight and text layout is now about the wrong page.
+        CancelSearch();
+        ClearSelection();
+        _hits.Clear();
+        _hitsByPage.Clear();
+        _currentHit = -1;
+        PageHost.RecycleAll();
+        _scheduler.BumpGeneration();
+        Retire(_cache.Clear());
+
+        int page = Math.Clamp(CurrentPage, 0, Math.Max(0, session.PageCount - 1));
+        _layout = new PageLayout(session.Pages);
+        PageHost.Layout = _layout;
+        PageCountText.Text = $"/ {session.PageCount}";
+        CurrentPage = page;
+
+        double zoom = _fit == FitMode.Custom ? _zoom : ComputeModeZoom();
+        _zoom = _pendingZoom = zoom;
+        UpdateLayout(zoom);
+        PageHost.InvalidateMeasure();
+        PageHost.UpdateLayout();
+        _previewTransform.ScaleX = _previewTransform.ScaleY = 1;
+        ZoomText.Text = $"{Math.Round(zoom * 100)}%";
+
+        _suppressPageBox = true;
+        PageBox.Text = (page + 1).ToString();
+        _suppressPageBox = false;
+
+        ScrollToPage(page);
+        RefreshVisible(prefetch: true);
+        StateChanged?.Invoke(this);
+    }
+
     // ------------------------------------------------------------------ toolbar state
 
     /// <summary>Pushes the current mode onto the toggles. Guarded because setting IsChecked raises Click handlers.</summary>

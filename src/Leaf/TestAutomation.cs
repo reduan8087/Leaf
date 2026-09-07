@@ -6,12 +6,21 @@ namespace Leaf;
 /// <summary>
 /// Scripted UI actions for automated verification (screenshots, perf runs). Only active when the environment variable
 /// LEAF_TEST_ACTIONS is set, e.g. "wait:800;find:Business;columns:2;scrolling:off;pagedown;selectall".
+///
+/// Actions prefixed "organize." and "combine" drive the page-editing surfaces, which is the only way to test
+/// them without synthesising input: keyboard shortcuts sent from outside do not reliably reach the window.
 /// </summary>
 internal static class TestAutomation
 {
     private static bool s_ran;
 
-    public static async Task RunIfRequestedAsync(ViewerControl viewer)
+    /// <summary>Parses "1,3,5" into zero-based page indices.</summary>
+    private static int[] ParsePages(string value) =>
+        [.. value.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                 .Select(part => int.TryParse(part, NumberStyles.None, CultureInfo.InvariantCulture, out int n) ? n - 1 : -1)
+                 .Where(n => n >= 0)];
+
+    public static async Task RunIfRequestedAsync(ViewerControl viewer, MainWindow? window = null)
     {
         string? script = Environment.GetEnvironmentVariable("LEAF_TEST_ACTIONS");
         if (string.IsNullOrWhiteSpace(script) || s_ran)
@@ -124,6 +133,52 @@ internal static class TestAutomation
                     }
 
                     break;
+                case "organize":
+                    if (window is not null)
+                    {
+                        await window.TestOpenOrganizeAsync();
+                    }
+
+                    break;
+                case "organize.select":
+                    window?.TestOrganize?.TestSelect(ParsePages(arg));
+                    break;
+                case "organize.rotate":
+                    window?.TestOrganize?.TestRotate(arg == "left" ? -1 : +1);
+                    break;
+                case "organize.delete":
+                    window?.TestOrganize?.TestDelete();
+                    break;
+                case "organize.movestart":
+                    window?.TestOrganize?.TestMove(toStart: true);
+                    break;
+                case "organize.moveend":
+                    window?.TestOrganize?.TestMove(toStart: false);
+                    break;
+                case "organize.done":
+                    if (window?.TestOrganize is { } done)
+                    {
+                        await done.TestDoneAsync();
+                    }
+
+                    break;
+                case "organize.cancel":
+                    window?.TestOrganize?.TestCancel();
+                    break;
+                case "combine":
+                    if (window is not null)
+                    {
+                        await window.TestCombineAsync(arg.Split('|', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries));
+                    }
+
+                    break;
+                case "saveas":
+                    if (window is not null)
+                    {
+                        await window.TestSaveAsAsync(arg);
+                    }
+
+                    break;
                 case "touchfile":
                     // simulate an external save so the file watcher offers a reload
                     if (viewer.Session is { } s)
@@ -136,7 +191,7 @@ internal static class TestAutomation
                     continue;
             }
 
-            await Task.Delay(400);
+            await Task.Delay(500);
             PerfLog.Stamp($"after-{action} offset={viewer.VerticalOffset:F0}/{viewer.ScrollableHeight:F0} vh={viewer.ViewportHeight:F0} page={viewer.CurrentPage + 1} zoom={viewer.Zoom:F2}");
         }
 
