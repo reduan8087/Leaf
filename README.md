@@ -91,6 +91,7 @@ To uninstall, use Settings > Apps > Leaf. Nothing else on the system is touched:
 | Rotate right / left | `Ctrl+Shift+R` / `Ctrl+Shift+L` |
 | Go to page | `Ctrl+G`, then type the number and press `Enter` |
 | Scroll or turn the page | `Page Down` / `Page Up` / `Space` / `Shift+Space` / arrow keys / `Home` / `End` |
+| Turn the page with the wheel | with continuous scrolling off, the mouse wheel scrolls the page and turns it once there is nothing left to scroll |
 | Find / next / previous | `Ctrl+F` / `F3` or `Enter` / `Shift+F3` or `Shift+Enter` |
 | Select all text on the page / copy | `Ctrl+A` / `Ctrl+C` |
 | Close find bar or clear selection | `Esc` |

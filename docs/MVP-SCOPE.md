@@ -22,6 +22,7 @@ Goal: replace Adobe Acrobat Reader for everyday reading on one Windows 11 laptop
   from disk. Saving always writes a temp file and swaps, so a failed write cannot damage the original.
 - **View modes** as two independent axes: columns (1 / 2 / N) and continuous scrolling on or off, plus "cover page on its own".
   Fit width, fit height, fit page and actual size. All of it on the toolbar, not buried in a menu.
+  With scrolling off, the mouse wheel scrolls the page and turns it at the edge, as the keyboard already did.
 - **Full screen** on F11 or Ctrl+L, Esc to leave; the chrome returns when the pointer reaches the top edge.
 - **Thumbnails and bookmarks panels** (F4), resizable, with the page being read highlighted.
 - **Clickable links**: internal jumps, and web links opened only after the address has been shown.

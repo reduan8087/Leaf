@@ -23,6 +23,9 @@ public sealed partial class ViewerControl : UserControl, IDisposable
 
     /// <summary>How much retired tile memory is worth asking the GC to reclaim. Roughly two screenfuls.</summary>
     private const long CollectAfterRetiredBytes = 96L << 20;
+
+    /// <summary>Minimum gap between wheel-driven page turns, in milliseconds.</summary>
+    private const long WheelTurnCooldownMs = 220;
     private static bool s_firstPageStamped;
 
     private readonly TileCache _cache = new();
@@ -46,6 +49,9 @@ public sealed partial class ViewerControl : UserControl, IDisposable
 
     /// <summary>Tile bytes retired since a collection was last asked for.</summary>
     private long _retiredBytes;
+
+    /// <summary>When the wheel last turned a page, so one flick does not skip several.</summary>
+    private long _lastWheelTurn;
 
     public ViewerControl()
     {
@@ -558,19 +564,68 @@ public sealed partial class ViewerControl : UserControl, IDisposable
 
     private void OnPointerWheel(object sender, PointerRoutedEventArgs e)
     {
-        if (!e.KeyModifiers.HasFlag(VirtualKeyModifiers.Control) || _layout is null)
+        if (_layout is null)
         {
             return;
         }
 
         var point = e.GetCurrentPoint(Scroller);
-        int notches = point.Properties.MouseWheelDelta / 120;
-        if (notches == 0)
+        int delta = point.Properties.MouseWheelDelta;
+
+        if (e.KeyModifiers.HasFlag(VirtualKeyModifiers.Control))
         {
-            notches = Math.Sign(point.Properties.MouseWheelDelta);
+            int notches = delta / 120;
+            if (notches == 0)
+            {
+                notches = Math.Sign(delta);
+            }
+
+            BeginZoom(_pendingZoom * Math.Pow(1.1, notches), point.Position);
+            e.Handled = true;
+            return;
         }
 
-        BeginZoom(_pendingZoom * Math.Pow(1.1, notches), point.Position);
+        TurnPageOnWheel(delta, e);
+    }
+
+    /// <summary>
+    /// With continuous scrolling off, only one row is on the surface, so the wheel would otherwise stop dead at
+    /// the edge of the page. Once there is nothing left to scroll, the next notch turns the page instead, which
+    /// is what a page-at-a-time reader expects.
+    /// </summary>
+    private void TurnPageOnWheel(int delta, PointerRoutedEventArgs e)
+    {
+        if (_arrangement.Continuous || delta == 0 || _layout is null)
+        {
+            return;
+        }
+
+        int direction = delta < 0 ? +1 : -1;
+
+        // The ScrollViewer handles the wheel before this runs, so a page that still has room simply scrolls.
+        bool moreToScroll = direction > 0
+            ? Scroller.VerticalOffset < Scroller.ScrollableHeight - 1
+            : Scroller.VerticalOffset > 1;
+        if (moreToScroll)
+        {
+            return;
+        }
+
+        // A flick of the wheel is many notches; without this it would skip several pages at once.
+        if (Environment.TickCount64 - _lastWheelTurn < WheelTurnCooldownMs)
+        {
+            e.Handled = true;
+            return;
+        }
+
+        int target = _layout.PageByRowStep(CurrentPage, direction);
+        if (target == CurrentPage)
+        {
+            return; // already at the first or last page
+        }
+
+        _lastWheelTurn = Environment.TickCount64;
+        SetAnchorRow(target, toBottom: direction < 0);
         e.Handled = true;
     }
 
