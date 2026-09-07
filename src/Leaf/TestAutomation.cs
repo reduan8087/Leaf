@@ -1,11 +1,11 @@
-using System.Globalization;
+﻿using System.Globalization;
 using Leaf.Viewer;
 
 namespace Leaf;
 
 /// <summary>
 /// Scripted UI actions for automated verification (screenshots, perf runs). Only active when the environment variable
-/// LEAF_TEST_ACTIONS is set, e.g. "wait:800;find:Business;zoomin;zoomin;rotate;pagedown;selectall".
+/// LEAF_TEST_ACTIONS is set, e.g. "wait:800;find:Business;columns:2;scrolling:off;pagedown;selectall".
 /// </summary>
 internal static class TestAutomation
 {
@@ -64,6 +64,25 @@ internal static class TestAutomation
                     break;
                 case "fitwidth":
                     viewer.FitWidth();
+                    break;
+                case "fitheight":
+                    viewer.FitHeight();
+                    break;
+                case "actualsize":
+                    viewer.ShowActualSize();
+                    break;
+                case "columns":
+                    if (int.TryParse(arg, NumberStyles.None, CultureInfo.InvariantCulture, out int columns))
+                    {
+                        viewer.SetColumns(columns);
+                    }
+
+                    break;
+                case "cover":
+                    viewer.SetCoverPageSeparate(!string.Equals(arg, "off", StringComparison.OrdinalIgnoreCase));
+                    break;
+                case "scrolling":
+                    viewer.SetContinuous(!string.Equals(arg, "off", StringComparison.OrdinalIgnoreCase));
                     break;
                 case "rotate":
                     viewer.Rotate(+1);

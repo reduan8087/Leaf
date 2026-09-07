@@ -49,10 +49,47 @@
 
                         <MenuFlyoutSeparator />
 
-                        <MenuFlyoutItem x:Name="FullScreenMenuItem" Text="Full screen" Click="OnFullScreenClick">
-                            <MenuFlyoutItem.KeyboardAcceleratorTextOverride>F11</MenuFlyoutItem.KeyboardAcceleratorTextOverride>
-                            <MenuFlyoutItem.Icon><FontIcon Glyph="&#xE740;" /></MenuFlyoutItem.Icon>
-                        </MenuFlyoutItem>
+                        <MenuFlyoutSubItem x:Name="ViewMenu" Text="View">
+                            <MenuFlyoutSubItem.Icon><FontIcon Glyph="&#xE890;" /></MenuFlyoutSubItem.Icon>
+                            <RadioMenuFlyoutItem x:Name="FitWidthMenuItem" Text="Fit width" GroupName="LeafFit" Click="OnMenuFitWidth">
+                                <RadioMenuFlyoutItem.KeyboardAcceleratorTextOverride>Ctrl+0</RadioMenuFlyoutItem.KeyboardAcceleratorTextOverride>
+                            </RadioMenuFlyoutItem>
+                            <RadioMenuFlyoutItem x:Name="FitHeightMenuItem" Text="Fit height" GroupName="LeafFit" Click="OnMenuFitHeight">
+                                <RadioMenuFlyoutItem.KeyboardAcceleratorTextOverride>Ctrl+3</RadioMenuFlyoutItem.KeyboardAcceleratorTextOverride>
+                            </RadioMenuFlyoutItem>
+                            <RadioMenuFlyoutItem x:Name="FitPageMenuItem" Text="Fit page" GroupName="LeafFit" Click="OnMenuFitPage">
+                                <RadioMenuFlyoutItem.KeyboardAcceleratorTextOverride>Ctrl+2</RadioMenuFlyoutItem.KeyboardAcceleratorTextOverride>
+                            </RadioMenuFlyoutItem>
+                            <RadioMenuFlyoutItem x:Name="ActualSizeMenuItem" Text="Actual size" GroupName="LeafFit" Click="OnMenuActualSize">
+                                <RadioMenuFlyoutItem.KeyboardAcceleratorTextOverride>Ctrl+1</RadioMenuFlyoutItem.KeyboardAcceleratorTextOverride>
+                            </RadioMenuFlyoutItem>
+
+                            <MenuFlyoutSeparator />
+
+                            <RadioMenuFlyoutItem x:Name="OneUpMenuItem" Text="Single page" GroupName="LeafColumns" Click="OnMenuOneUp">
+                                <RadioMenuFlyoutItem.KeyboardAcceleratorTextOverride>Ctrl+Shift+1</RadioMenuFlyoutItem.KeyboardAcceleratorTextOverride>
+                            </RadioMenuFlyoutItem>
+                            <RadioMenuFlyoutItem x:Name="TwoUpMenuItem" Text="Two pages" GroupName="LeafColumns" Click="OnMenuTwoUp">
+                                <RadioMenuFlyoutItem.KeyboardAcceleratorTextOverride>Ctrl+Shift+2</RadioMenuFlyoutItem.KeyboardAcceleratorTextOverride>
+                            </RadioMenuFlyoutItem>
+                            <RadioMenuFlyoutItem x:Name="GridMenuItem" Text="Grid of pages" GroupName="LeafColumns" Click="OnMenuGrid">
+                                <RadioMenuFlyoutItem.KeyboardAcceleratorTextOverride>Ctrl+Shift+3</RadioMenuFlyoutItem.KeyboardAcceleratorTextOverride>
+                            </RadioMenuFlyoutItem>
+                            <ToggleMenuFlyoutItem x:Name="CoverMenuItem" Text="Show cover page on its own" Click="OnMenuCover" />
+
+                            <MenuFlyoutSeparator />
+
+                            <ToggleMenuFlyoutItem x:Name="ContinuousMenuItem" Text="Continuous scrolling" Click="OnMenuContinuous">
+                                <ToggleMenuFlyoutItem.KeyboardAcceleratorTextOverride>Ctrl+Shift+E</ToggleMenuFlyoutItem.KeyboardAcceleratorTextOverride>
+                            </ToggleMenuFlyoutItem>
+
+                            <MenuFlyoutSeparator />
+
+                            <MenuFlyoutItem x:Name="FullScreenMenuItem" Text="Full screen" Click="OnFullScreenClick">
+                                <MenuFlyoutItem.KeyboardAcceleratorTextOverride>F11</MenuFlyoutItem.KeyboardAcceleratorTextOverride>
+                                <MenuFlyoutItem.Icon><FontIcon Glyph="&#xE740;" /></MenuFlyoutItem.Icon>
+                            </MenuFlyoutItem>
+                        </MenuFlyoutSubItem>
 
                         <MenuFlyoutSeparator />
 

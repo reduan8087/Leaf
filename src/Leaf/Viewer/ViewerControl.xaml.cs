@@ -10,13 +10,6 @@ using Windows.System;
 
 namespace Leaf.Viewer;
 
-public enum ZoomMode
-{
-    FitWidth,
-    FitPage,
-    Custom,
-}
-
 /// <summary>
 /// The document viewer: continuous scroll of virtualized pages, tile rendering through <see cref="RenderScheduler"/>,
 /// two-phase zoom (GPU preview, then crisp re-render), rotation, navigation, find and text selection.
@@ -42,7 +35,8 @@ public sealed partial class ViewerControl : UserControl, IDisposable
     private double _pendingZoom = 1.0;
     private Point _zoomAnchor;
     private int _rotation;
-    private ZoomMode _zoomMode = ZoomMode.FitWidth;
+    private FitMode _fit = FitMode.FitWidth;
+    private PageArrangement _arrangement = PageArrangement.Default;
     private double _rasterizationScale = 1.0;
     private bool _disposed;
     private bool _suppressPageBox;
@@ -68,6 +62,7 @@ public sealed partial class ViewerControl : UserControl, IDisposable
         KeyDown += OnViewerKeyDown;
         InitializeTextInput();
         WireAccelerators();
+        ApplyPreferences(Services.SettingsStore.Current.View);
     }
 
     public DocumentSession? Session => _session;
@@ -133,7 +128,7 @@ public sealed partial class ViewerControl : UserControl, IDisposable
             Scroller.SizeChanged -= Handler;
         }
 
-        _zoomMode = ZoomMode.FitWidth;
+        ApplyPreferences(Services.SettingsStore.Current.View);
         ApplyZoom(ComputeModeZoom(), keepTop: true);
         RefreshVisible(prefetch: true);
         Focus(FocusState.Programmatic);
@@ -194,7 +189,7 @@ public sealed partial class ViewerControl : UserControl, IDisposable
         }
 
         double zoom = _zoom;
-        ZoomMode mode = _zoomMode;
+        FitMode mode = _fit;
         int rotation = _rotation;
         double x = Scroller.HorizontalOffset;
         double y = Scroller.VerticalOffset;
@@ -211,9 +206,9 @@ public sealed partial class ViewerControl : UserControl, IDisposable
         ViewerNotice.ActionButton = null;
         ViewerNotice.IsOpen = false;
         _rotation = rotation;
-        _zoomMode = mode;
-        _zoom = _pendingZoom = mode == ZoomMode.Custom ? zoom : ComputeModeZoom();
-        _layout!.Update(_zoom, _rotation, Scroller.ViewportWidth);
+        _fit = mode;
+        _zoom = _pendingZoom = mode == FitMode.Custom ? zoom : ComputeModeZoom();
+        UpdateLayout(_zoom);
         PageHost.InvalidateMeasure();
         PageHost.UpdateLayout();
         ZoomText.Text = $"{Math.Round(_zoom * 100)}%";
@@ -262,7 +257,7 @@ public sealed partial class ViewerControl : UserControl, IDisposable
             return;
         }
 
-        if (_zoomMode != ZoomMode.Custom)
+        if (_fit != FitMode.Custom)
         {
             double z = ComputeModeZoom();
             if (Math.Abs(z - _zoom) > 1e-3)
@@ -272,7 +267,7 @@ public sealed partial class ViewerControl : UserControl, IDisposable
         }
         else
         {
-            _layout.Update(_zoom, _rotation, Scroller.ViewportWidth);
+            UpdateLayout(_zoom);
             PageHost.InvalidateMeasure();
         }
 
@@ -523,10 +518,12 @@ public sealed partial class ViewerControl : UserControl, IDisposable
 
         double vw = Scroller.ViewportWidth > 0 ? Scroller.ViewportWidth : ActualWidth;
         double vh = Scroller.ViewportHeight > 0 ? Scroller.ViewportHeight : ActualHeight;
-        return _zoomMode switch
+        return _fit switch
         {
-            ZoomMode.FitWidth => _layout.FitWidthZoom(vw - 2, _rotation),
-            ZoomMode.FitPage => _layout.FitPageZoom(vw - 2, vh, CurrentPage, _rotation),
+            FitMode.FitWidth => _layout.FitWidthZoom(vw - 2, _rotation, _arrangement),
+            FitMode.FitHeight => _layout.FitHeightZoom(vh, _rotation),
+            FitMode.FitPage => _layout.FitPageZoom(vw - 2, vh, CurrentPage, _rotation, _arrangement),
+            FitMode.ActualSize => 1.0,
             _ => _zoom,
         };
     }
@@ -557,7 +554,7 @@ public sealed partial class ViewerControl : UserControl, IDisposable
             return;
         }
 
-        _zoomMode = ZoomMode.Custom;
+        SetFitMode(FitMode.Custom);
         _pendingZoom = Math.Clamp(target, MinZoom, MaxZoom);
         _zoomAnchor = anchorInViewport;
         double ratio = _pendingZoom / _zoom;
@@ -611,7 +608,7 @@ public sealed partial class ViewerControl : UserControl, IDisposable
         double ratio = zoom / _zoom;
         _zoom = zoom;
         _pendingZoom = zoom;
-        _layout.Update(zoom, _rotation, Scroller.ViewportWidth);
+        UpdateLayout(zoom);
         foreach (PdfPageView view in PageHost.Realized.Values)
         {
             view.DemoteTilesToStale(ratio);
@@ -634,7 +631,7 @@ public sealed partial class ViewerControl : UserControl, IDisposable
 
     public void SetZoom(double zoom)
     {
-        _zoomMode = ZoomMode.Custom;
+        SetFitMode(FitMode.Custom);
         ApplyZoom(zoom, keepTop: false);
     }
 
@@ -649,32 +646,27 @@ public sealed partial class ViewerControl : UserControl, IDisposable
     /// <summary>Hides the toolbar in full screen; the window reveals it again near the top edge.</summary>
     public void SetToolbarVisible(bool visible) => Toolbar.Visibility = visible ? Visibility.Visible : Visibility.Collapsed;
 
-    public void FitWidth()
-    {
-        _zoomMode = ZoomMode.FitWidth;
-        ApplyZoom(ComputeModeZoom(), keepTop: true);
-    }
+    public void FitWidth() => SetFit(FitMode.FitWidth);
 
-    public void FitPage()
-    {
-        _zoomMode = ZoomMode.FitPage;
-        ApplyZoom(ComputeModeZoom(), keepTop: true);
-        GoToPage(CurrentPage);
-    }
+    public void FitHeight() => SetFit(FitMode.FitHeight);
+
+    public void FitPage() => SetFit(FitMode.FitPage);
+
+    public void ShowActualSize() => SetFit(FitMode.ActualSize);
 
     private void OnZoomIn(object sender, RoutedEventArgs e) => ZoomIn();
 
     private void OnZoomOut(object sender, RoutedEventArgs e) => ZoomOut();
 
-    private void OnFitWidth(object sender, RoutedEventArgs e) => FitWidth();
+    private void OnFitWidth(object sender, RoutedEventArgs e) => Guarded(FitWidth);
 
-    private void OnFitPage(object sender, RoutedEventArgs e) => FitPage();
+    private void OnFitPage(object sender, RoutedEventArgs e) => Guarded(FitPage);
 
     private void OnZoomPreset(object sender, RoutedEventArgs e)
     {
         if (sender is MenuFlyoutItem { Tag: string tag } && double.TryParse(tag, System.Globalization.CultureInfo.InvariantCulture, out double z))
         {
-            _zoomMode = ZoomMode.Custom;
+            SetFitMode(FitMode.Custom);
             ApplyZoom(z, keepTop: false);
         }
     }
@@ -702,9 +694,9 @@ public sealed partial class ViewerControl : UserControl, IDisposable
 
         _scheduler.BumpGeneration();
         Retire(_cache.Clear());
-        double zoom = _zoomMode == ZoomMode.Custom ? _zoom : ComputeModeZoomForRotation();
+        double zoom = _fit == FitMode.Custom ? _zoom : ComputeModeZoom();
         _zoom = _pendingZoom = zoom;
-        _layout.Update(zoom, _rotation, Scroller.ViewportWidth);
+        UpdateLayout(zoom);
         PageHost.InvalidateMeasure();
         PageHost.UpdateLayout();
         Rect newRect = _layout.PageRect(page);
@@ -717,8 +709,6 @@ public sealed partial class ViewerControl : UserControl, IDisposable
 
         RefreshVisible(prefetch: false);
     }
-
-    private double ComputeModeZoomForRotation() => ComputeModeZoom();
 
     private void OnRotateLeft(object sender, RoutedEventArgs e) => Rotate(-1);
 
@@ -733,9 +723,7 @@ public sealed partial class ViewerControl : UserControl, IDisposable
             return;
         }
 
-        index = Math.Clamp(index, 0, _session.PageCount - 1);
-        Rect r = _layout.PageRect(index);
-        Scroller.ChangeView(null, Math.Max(0, r.Top - PageLayout.GapDip), null, disableAnimation: false);
+        ScrollToPage(Math.Clamp(index, 0, _session.PageCount - 1));
     }
 
     public void ScrollBy(double dx, double dy, bool animate = true)
@@ -743,9 +731,9 @@ public sealed partial class ViewerControl : UserControl, IDisposable
         Scroller.ChangeView(Scroller.HorizontalOffset + dx, Scroller.VerticalOffset + dy, null, disableAnimation: !animate);
     }
 
-    private void OnPrevPage(object sender, RoutedEventArgs e) => GoToPage(CurrentPage - 1);
+    private void OnPrevPage(object sender, RoutedEventArgs e) => RowStep(-1);
 
-    private void OnNextPage(object sender, RoutedEventArgs e) => GoToPage(CurrentPage + 1);
+    private void OnNextPage(object sender, RoutedEventArgs e) => RowStep(+1);
 
     private void OnPageBoxKeyDown(object sender, KeyRoutedEventArgs e)
     {
@@ -799,6 +787,13 @@ public sealed partial class ViewerControl : UserControl, IDisposable
         Add(VirtualKey.F, VirtualKeyModifiers.Control, ShowFind);
         Add(VirtualKey.G, VirtualKeyModifiers.Control, FocusPageBox);
         Add(VirtualKey.Number0, VirtualKeyModifiers.Control, FitWidth);
+        Add(VirtualKey.Number1, VirtualKeyModifiers.Control, ShowActualSize);
+        Add(VirtualKey.Number2, VirtualKeyModifiers.Control, FitPage);
+        Add(VirtualKey.Number3, VirtualKeyModifiers.Control, FitHeight);
+        Add(VirtualKey.Number1, VirtualKeyModifiers.Control | VirtualKeyModifiers.Shift, () => SetColumns(1));
+        Add(VirtualKey.Number2, VirtualKeyModifiers.Control | VirtualKeyModifiers.Shift, () => SetColumns(2));
+        Add(VirtualKey.Number3, VirtualKeyModifiers.Control | VirtualKeyModifiers.Shift, () => SetColumns(4));
+        Add(VirtualKey.E, VirtualKeyModifiers.Control | VirtualKeyModifiers.Shift, ToggleContinuous);
         Add(VirtualKey.Add, VirtualKeyModifiers.Control, ZoomIn);
         Add(VirtualKey.Subtract, VirtualKeyModifiers.Control, ZoomOut);
         Add((VirtualKey)0xBB, VirtualKeyModifiers.Control, ZoomIn);      // main-row '='/'+'
@@ -818,18 +813,17 @@ public sealed partial class ViewerControl : UserControl, IDisposable
             return; // typing in the page box or find box
         }
 
-        double vh = Scroller.ViewportHeight;
         bool shift = InputKeyboardSource.GetKeyStateForCurrentThread(VirtualKey.Shift).HasFlag(Windows.UI.Core.CoreVirtualKeyStates.Down);
         switch (e.Key)
         {
             case VirtualKey.PageDown:
-                ScrollBy(0, vh - 40);
+                PageStep(+1);
                 break;
             case VirtualKey.PageUp:
-                ScrollBy(0, -(vh - 40));
+                PageStep(-1);
                 break;
             case VirtualKey.Space:
-                ScrollBy(0, shift ? -(vh - 40) : vh - 40);
+                PageStep(shift ? -1 : +1);
                 break;
             case VirtualKey.Down:
                 ScrollBy(0, 60, animate: false);
@@ -844,10 +838,10 @@ public sealed partial class ViewerControl : UserControl, IDisposable
                 ScrollBy(-60, 0, animate: false);
                 break;
             case VirtualKey.Home:
-                Scroller.ChangeView(null, 0, null, disableAnimation: false);
+                GoToPage(0);
                 break;
             case VirtualKey.End:
-                Scroller.ChangeView(null, Scroller.ScrollableHeight, null, disableAnimation: false);
+                GoToPage(PageCount - 1);
                 break;
             case VirtualKey.Escape:
                 if (FindBar.Visibility == Visibility.Visible)

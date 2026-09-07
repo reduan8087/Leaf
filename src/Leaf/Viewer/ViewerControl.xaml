@@ -20,6 +20,27 @@
             <Setter Property="Padding" Value="8,6" />
             <Setter Property="MinWidth" Value="36" />
         </Style>
+
+        <!--
+            The view-mode icons are drawn rather than taken from the icon font: a rectangle for one page,
+            two for a spread and a 2x2 grid for N-up read at a glance and cannot fall back to a missing glyph.
+        -->
+        <Style x:Key="IconStroke" TargetType="Path">
+            <Setter Property="Stroke" Value="{ThemeResource TextFillColorPrimaryBrush}" />
+            <Setter Property="StrokeThickness" Value="1.3" />
+            <Setter Property="StrokeLineJoin" Value="Round" />
+            <Setter Property="StrokeStartLineCap" Value="Round" />
+            <Setter Property="StrokeEndLineCap" Value="Round" />
+            <Setter Property="Width" Value="16" />
+            <Setter Property="Height" Value="16" />
+        </Style>
+        <Style x:Key="PageGlyph" TargetType="Rectangle">
+            <Setter Property="Stroke" Value="{ThemeResource TextFillColorPrimaryBrush}" />
+            <Setter Property="StrokeThickness" Value="1.3" />
+            <Setter Property="Fill" Value="Transparent" />
+            <Setter Property="RadiusX" Value="1" />
+            <Setter Property="RadiusY" Value="1" />
+        </Style>
     </UserControl.Resources>
 
     <Grid x:Name="Root">
@@ -28,29 +49,53 @@
             <RowDefinition Height="*" />
         </Grid.RowDefinitions>
 
-        <!-- Toolbar -->
-        <Grid x:Name="Toolbar" Grid.Row="0" Padding="8,4" Background="{ThemeResource LayerFillColorDefaultBrush}" BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}" BorderThickness="0,0,0,1">
-            <StackPanel Orientation="Horizontal" Spacing="2" HorizontalAlignment="Center">
+        <!-- Toolbar: navigation on the left, zoom in the middle, view modes on the right. -->
+        <Grid x:Name="Toolbar" Grid.Row="0" Padding="8,4" ColumnSpacing="8"
+              Background="{ThemeResource LayerFillColorDefaultBrush}"
+              BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}" BorderThickness="0,0,0,1"
+              SizeChanged="OnToolbarSizeChanged">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+
+            <!-- Left: page navigation -->
+            <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="2" VerticalAlignment="Center">
                 <Button x:Name="PrevPageButton" Style="{StaticResource ToolButton}" Click="OnPrevPage" ToolTipService.ToolTip="Previous page (Page Up)">
                     <FontIcon Glyph="&#xE70E;" FontSize="14" />
                 </Button>
-                <TextBox x:Name="PageBox" Width="64" TextAlignment="Center" VerticalAlignment="Center" KeyDown="OnPageBoxKeyDown" LostFocus="OnPageBoxLostFocus" ToolTipService.ToolTip="Go to page (Ctrl+G)" />
-                <TextBlock x:Name="PageCountText" VerticalAlignment="Center" Margin="6,0,6,0" Text="/ 0" Opacity="0.8" />
+                <TextBox x:Name="PageBox" Width="56" TextAlignment="Center" VerticalAlignment="Center" KeyDown="OnPageBoxKeyDown" LostFocus="OnPageBoxLostFocus" ToolTipService.ToolTip="Go to page (Ctrl+G)" />
+                <TextBlock x:Name="PageCountText" VerticalAlignment="Center" Margin="6,0,4,0" Text="/ 0" Opacity="0.8" />
                 <Button x:Name="NextPageButton" Style="{StaticResource ToolButton}" Click="OnNextPage" ToolTipService.ToolTip="Next page (Page Down)">
                     <FontIcon Glyph="&#xE70D;" FontSize="14" />
                 </Button>
+            </StackPanel>
 
-                <AppBarSeparator Margin="6,0" />
-
+            <!-- Centre: zoom and the two fit modes people reach for most -->
+            <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="2" HorizontalAlignment="Center" VerticalAlignment="Center">
                 <Button Style="{StaticResource ToolButton}" Click="OnZoomOut" ToolTipService.ToolTip="Zoom out (Ctrl+-)">
                     <FontIcon Glyph="&#xE71F;" FontSize="14" />
                 </Button>
-                <Button x:Name="ZoomButton" Style="{StaticResource ToolButton}" MinWidth="88" ToolTipService.ToolTip="Zoom">
-                    <TextBlock x:Name="ZoomText" Text="100%" />
+                <Button x:Name="ZoomButton" Style="{StaticResource ToolButton}" MinWidth="92" ToolTipService.ToolTip="Zoom">
+                    <StackPanel Orientation="Horizontal" Spacing="6">
+                        <TextBlock x:Name="ZoomText" Text="100%" VerticalAlignment="Center" />
+                        <FontIcon Glyph="&#xE70D;" FontSize="10" VerticalAlignment="Center" Opacity="0.7" />
+                    </StackPanel>
                     <Button.Flyout>
                         <MenuFlyout>
-                            <MenuFlyoutItem Text="Fit width" Click="OnFitWidth" />
-                            <MenuFlyoutItem Text="Fit page" Click="OnFitPage" />
+                            <MenuFlyoutItem Text="Fit width" Click="OnFitWidth">
+                                <MenuFlyoutItem.KeyboardAcceleratorTextOverride>Ctrl+0</MenuFlyoutItem.KeyboardAcceleratorTextOverride>
+                            </MenuFlyoutItem>
+                            <MenuFlyoutItem Text="Fit height" Click="OnFitHeight">
+                                <MenuFlyoutItem.KeyboardAcceleratorTextOverride>Ctrl+3</MenuFlyoutItem.KeyboardAcceleratorTextOverride>
+                            </MenuFlyoutItem>
+                            <MenuFlyoutItem Text="Fit page" Click="OnFitPage">
+                                <MenuFlyoutItem.KeyboardAcceleratorTextOverride>Ctrl+2</MenuFlyoutItem.KeyboardAcceleratorTextOverride>
+                            </MenuFlyoutItem>
+                            <MenuFlyoutItem Text="Actual size" Click="OnActualSize">
+                                <MenuFlyoutItem.KeyboardAcceleratorTextOverride>Ctrl+1</MenuFlyoutItem.KeyboardAcceleratorTextOverride>
+                            </MenuFlyoutItem>
                             <MenuFlyoutSeparator />
                             <MenuFlyoutItem Text="50%" Tag="0.5" Click="OnZoomPreset" />
                             <MenuFlyoutItem Text="75%" Tag="0.75" Click="OnZoomPreset" />
@@ -69,19 +114,99 @@
 
                 <AppBarSeparator Margin="6,0" />
 
+                <ToggleButton x:Name="FitWidthToggle" Style="{StaticResource ToolToggle}" Click="OnFitWidth" ToolTipService.ToolTip="Fit width (Ctrl+0)">
+                    <!-- two uprights with a horizontal double arrow between them -->
+                    <Path Style="{StaticResource IconStroke}" Data="M1,2 L1,14 M15,2 L15,14 M4,8 L12,8 M4,8 L6.5,5.5 M4,8 L6.5,10.5 M12,8 L9.5,5.5 M12,8 L9.5,10.5" />
+                </ToggleButton>
+                <ToggleButton x:Name="FitHeightToggle" Style="{StaticResource ToolToggle}" Click="OnFitHeight" ToolTipService.ToolTip="Fit height (Ctrl+3)">
+                    <Path Style="{StaticResource IconStroke}" Data="M2,1 L14,1 M2,15 L14,15 M8,4 L8,12 M8,4 L5.5,6.5 M8,4 L10.5,6.5 M8,12 L5.5,9.5 M8,12 L10.5,9.5" />
+                </ToggleButton>
+                <ToggleButton x:Name="FitPageToggle" Style="{StaticResource ToolToggle}" Click="OnFitPage" ToolTipService.ToolTip="Fit page (Ctrl+2)">
+                    <Path Style="{StaticResource IconStroke}" Data="M1.5,1.5 L14.5,1.5 L14.5,14.5 L1.5,14.5 Z M5,5 L11,11 M5,5 L5,8 M5,5 L8,5 M11,11 L11,8 M11,11 L8,11" />
+                </ToggleButton>
+            </StackPanel>
+
+            <!-- Right: page arrangement, rotation, find, full screen -->
+            <StackPanel x:Name="RightZone" Grid.Column="2" Orientation="Horizontal" Spacing="2" VerticalAlignment="Center">
+                <ToggleButton x:Name="OneUpToggle" Style="{StaticResource ToolToggle}" Click="OnOneUp" ToolTipService.ToolTip="Single page (Ctrl+Shift+1)">
+                    <Rectangle Style="{StaticResource PageGlyph}" Width="9" Height="13" />
+                </ToggleButton>
+                <ToggleButton x:Name="TwoUpToggle" Style="{StaticResource ToolToggle}" Click="OnTwoUp" ToolTipService.ToolTip="Two pages (Ctrl+Shift+2)">
+                    <StackPanel Orientation="Horizontal" Spacing="2">
+                        <Rectangle Style="{StaticResource PageGlyph}" Width="7" Height="13" />
+                        <Rectangle Style="{StaticResource PageGlyph}" Width="7" Height="13" />
+                    </StackPanel>
+                </ToggleButton>
+                <ToggleSplitButton x:Name="GridToggle" Background="Transparent" BorderThickness="0" Padding="6,4"
+                                   IsCheckedChanged="OnGridToggleChanged" ToolTipService.ToolTip="Grid of pages (Ctrl+Shift+3)">
+                    <StackPanel Spacing="2">
+                        <StackPanel Orientation="Horizontal" Spacing="2">
+                            <Rectangle Style="{StaticResource PageGlyph}" Width="6" Height="6" />
+                            <Rectangle Style="{StaticResource PageGlyph}" Width="6" Height="6" />
+                        </StackPanel>
+                        <StackPanel Orientation="Horizontal" Spacing="2">
+                            <Rectangle Style="{StaticResource PageGlyph}" Width="6" Height="6" />
+                            <Rectangle Style="{StaticResource PageGlyph}" Width="6" Height="6" />
+                        </StackPanel>
+                    </StackPanel>
+                    <ToggleSplitButton.Flyout>
+                        <MenuFlyout Placement="Bottom">
+                            <MenuFlyoutItem Text="3 columns" Tag="3" Click="OnColumnCount" />
+                            <MenuFlyoutItem Text="4 columns" Tag="4" Click="OnColumnCount" />
+                            <MenuFlyoutItem Text="5 columns" Tag="5" Click="OnColumnCount" />
+                            <MenuFlyoutItem Text="6 columns" Tag="6" Click="OnColumnCount" />
+                        </MenuFlyout>
+                    </ToggleSplitButton.Flyout>
+                </ToggleSplitButton>
+                <ToggleButton x:Name="CoverToggle" Style="{StaticResource ToolToggle}" Click="OnCoverToggle" ToolTipService.ToolTip="Show the cover page on its own">
+                    <StackPanel Orientation="Horizontal" Spacing="2">
+                        <Rectangle Style="{StaticResource PageGlyph}" Width="7" Height="13" Opacity="0.35" />
+                        <Rectangle Style="{StaticResource PageGlyph}" Width="7" Height="13" />
+                    </StackPanel>
+                </ToggleButton>
+
+                <AppBarSeparator Margin="6,0" />
+
+                <ToggleButton x:Name="ScrollToggle" Style="{StaticResource ToolToggle}" Click="OnScrollToggle" ToolTipService.ToolTip="Continuous scrolling (Ctrl+Shift+E)">
+                    <Path Style="{StaticResource IconStroke}" Data="M8,2 L8,14 M8,2 L5,5.5 M8,2 L11,5.5 M8,14 L5,10.5 M8,14 L11,10.5" />
+                </ToggleButton>
+
+                <AppBarSeparator Margin="6,0" />
+
                 <Button Style="{StaticResource ToolButton}" Click="OnRotateLeft" ToolTipService.ToolTip="Rotate left (Ctrl+Shift+L)">
                     <FontIcon Glyph="&#xE7A7;" FontSize="14" />
                 </Button>
                 <Button Style="{StaticResource ToolButton}" Click="OnRotateRight" ToolTipService.ToolTip="Rotate right (Ctrl+Shift+R)">
                     <FontIcon Glyph="&#xE7AD;" FontSize="14" />
                 </Button>
-
-                <AppBarSeparator Margin="6,0" />
-
                 <Button Style="{StaticResource ToolButton}" Click="OnFindButton" ToolTipService.ToolTip="Find (Ctrl+F)">
                     <FontIcon Glyph="&#xE721;" FontSize="14" />
                 </Button>
+                <Button Style="{StaticResource ToolButton}" Click="OnFullScreen" ToolTipService.ToolTip="Full screen (F11)">
+                    <FontIcon Glyph="&#xE740;" FontSize="14" />
+                </Button>
             </StackPanel>
+
+            <!-- Narrow windows fold the right-hand zone into one overflow button. -->
+            <Button x:Name="OverflowButton" Grid.Column="2" Style="{StaticResource ToolButton}" Visibility="Collapsed"
+                    VerticalAlignment="Center" ToolTipService.ToolTip="More view options">
+                <FontIcon Glyph="&#xE712;" FontSize="14" />
+                <Button.Flyout>
+                    <MenuFlyout Placement="BottomEdgeAlignedRight" Opening="OnOverflowOpening">
+                        <ToggleMenuFlyoutItem x:Name="OverflowOneUp" Text="Single page" Click="OnOneUp" />
+                        <ToggleMenuFlyoutItem x:Name="OverflowTwoUp" Text="Two pages" Click="OnTwoUp" />
+                        <ToggleMenuFlyoutItem x:Name="OverflowGrid" Text="Grid (4 columns)" Tag="4" Click="OnColumnCount" />
+                        <ToggleMenuFlyoutItem x:Name="OverflowCover" Text="Cover page on its own" Click="OnCoverToggle" />
+                        <MenuFlyoutSeparator />
+                        <ToggleMenuFlyoutItem x:Name="OverflowScroll" Text="Continuous scrolling" Click="OnScrollToggle" />
+                        <MenuFlyoutSeparator />
+                        <MenuFlyoutItem Text="Rotate left" Click="OnRotateLeft" />
+                        <MenuFlyoutItem Text="Rotate right" Click="OnRotateRight" />
+                        <MenuFlyoutItem Text="Find" Click="OnFindButton" />
+                        <MenuFlyoutItem Text="Full screen" Click="OnFullScreen" />
+                    </MenuFlyout>
+                </Button.Flyout>
+            </Button>
         </Grid>
 
         <!-- Document -->

@@ -286,6 +286,7 @@ public sealed partial class MainWindow : Window
         Tabs.TabItems.Add(tab);
         Tabs.SelectedItem = tab;
         viewer.StateChanged += _ => UpdateTitle();
+        viewer.FullScreenRequested += ToggleFullScreen;
         viewer.Reopen = () => OpenSessionAsync(path, closeTabOnFailure: null);
 
         DocumentSession? session = await OpenSessionAsync(path, closeTabOnFailure: tab);
@@ -419,11 +420,61 @@ public sealed partial class MainWindow : Window
     /// </summary>
     private void OnAppMenuOpening(object? sender, object e)
     {
-        bool hasDocument = CurrentViewer?.Session is not null;
+        ViewerControl? viewer = CurrentViewer;
+        bool hasDocument = viewer?.Session is not null;
         PropertiesMenuItem.IsEnabled = hasDocument;
+        ViewMenu.IsEnabled = hasDocument;
         FullScreenMenuItem.Text = _fullScreen ? "Exit full screen" : "Full screen";
+        SyncViewMenu(viewer);
         BuildRecentMenu();
     }
+
+    /// <summary>Mirrors the viewer's current modes into the View submenu as it opens.</summary>
+    private void SyncViewMenu(ViewerControl? viewer)
+    {
+        if (viewer is null)
+        {
+            return;
+        }
+
+        FitMode fit = viewer.Fit;
+        FitWidthMenuItem.IsChecked = fit == FitMode.FitWidth;
+        FitHeightMenuItem.IsChecked = fit == FitMode.FitHeight;
+        FitPageMenuItem.IsChecked = fit == FitMode.FitPage;
+        ActualSizeMenuItem.IsChecked = fit == FitMode.ActualSize;
+
+        PageArrangement arrangement = viewer.Arrangement;
+        OneUpMenuItem.IsChecked = arrangement.Columns == 1;
+        TwoUpMenuItem.IsChecked = arrangement.Columns == 2;
+        GridMenuItem.IsChecked = arrangement.Columns >= 3;
+        CoverMenuItem.IsChecked = arrangement.CoverPageSeparate;
+        CoverMenuItem.IsEnabled = arrangement.Columns > 1;
+        ContinuousMenuItem.IsChecked = arrangement.Continuous;
+    }
+
+    private void OnMenuFitWidth(object sender, RoutedEventArgs e) => CurrentViewer?.FitWidth();
+
+    private void OnMenuFitHeight(object sender, RoutedEventArgs e) => CurrentViewer?.FitHeight();
+
+    private void OnMenuFitPage(object sender, RoutedEventArgs e) => CurrentViewer?.FitPage();
+
+    private void OnMenuActualSize(object sender, RoutedEventArgs e) => CurrentViewer?.ShowActualSize();
+
+    private void OnMenuOneUp(object sender, RoutedEventArgs e) => CurrentViewer?.SetColumns(1);
+
+    private void OnMenuTwoUp(object sender, RoutedEventArgs e) => CurrentViewer?.SetColumns(2);
+
+    private void OnMenuGrid(object sender, RoutedEventArgs e) => CurrentViewer?.SetColumns(4);
+
+    private void OnMenuCover(object sender, RoutedEventArgs e)
+    {
+        if (CurrentViewer is ViewerControl viewer)
+        {
+            viewer.SetCoverPageSeparate(!viewer.Arrangement.CoverPageSeparate);
+        }
+    }
+
+    private void OnMenuContinuous(object sender, RoutedEventArgs e) => CurrentViewer?.ToggleContinuous();
 
     private void BuildRecentMenu()
     {
