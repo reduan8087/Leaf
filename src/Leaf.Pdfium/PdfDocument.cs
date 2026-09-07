@@ -1,3 +1,4 @@
+﻿using System.Diagnostics.CodeAnalysis;
 using System.Runtime.InteropServices;
 using System.Text;
 using Leaf.Pdfium.Native;
@@ -9,7 +10,7 @@ namespace Leaf.Pdfium;
 /// <see cref="PdfiumThread.RunAsync{T}"/>). Page handles are cached in a small LRU so scrolling does not
 /// reparse pages, while memory stays bounded.
 /// </summary>
-public sealed unsafe class PdfDocument : IDisposable
+public sealed unsafe partial class PdfDocument : IDisposable
 {
     private const int PageCacheSize = 8;
 
@@ -28,27 +29,16 @@ public sealed unsafe class PdfDocument : IDisposable
         _formInfo = formInfo;
         _form = form;
 
-        int count = NativeMethods.FPDF_GetPageCount(doc);
-        var pages = new PdfPageInfo[count];
-        for (int i = 0; i < count; i++)
-        {
-            FS_SIZEF size;
-            if (!NativeMethods.FPDF_GetPageSizeByIndexF(doc, i, &size) || size.Width <= 0 || size.Height <= 0)
-            {
-                size = new FS_SIZEF { Width = 612, Height = 792 }; // damaged page: pretend Letter so layout stays sane
-            }
-
-            pages[i] = new PdfPageInfo(i, size.Width, size.Height);
-        }
-
-        Pages = pages;
+        RebuildPages();
         Title = NativeMethods.ReadUtf16((buf, len) => NativeMethods.FPDF_GetMetaText(doc, "Title", (void*)buf, len));
     }
 
     public string Path { get; }
-    public IReadOnlyList<PdfPageInfo> Pages { get; }
+    public IReadOnlyList<PdfPageInfo> Pages { get; private set; }
     public int PageCount => Pages.Count;
     public string Title { get; }
+
+    internal nint Handle => _doc;
 
     /// <summary>True when the backing file changed or disappeared and a read failed.</summary>
     public bool SourceFaulted => _source.Faulted;

@@ -1,4 +1,4 @@
-using System.Runtime.InteropServices;
+﻿using System.Runtime.InteropServices;
 
 namespace Leaf.Pdfium.Native;
 
@@ -21,6 +21,18 @@ public unsafe struct FPDF_FILEACCESS
     public uint FileLen;
     public delegate* unmanaged<void*, uint, byte*, uint, int> GetBlock;
     public void* Param;
+}
+
+/// <summary>
+/// typedef struct { int version; int (*WriteBlock)(FPDF_FILEWRITE*, const void*, unsigned long); } FPDF_FILEWRITE;
+/// Note there is deliberately no user-data field: pdfium hands the struct pointer itself back to the callback,
+/// so PdfFileSink over-allocates the block and stores its GCHandle just past it.
+/// </summary>
+[StructLayout(LayoutKind.Sequential)]
+public unsafe struct FPDF_FILEWRITE
+{
+    public int Version;
+    public delegate* unmanaged<FPDF_FILEWRITE*, void*, uint, int> WriteBlock;
 }
 
 /// <summary>FPDF_LIBRARY_CONFIG, version 2 (later fields are only read for higher versions).</summary>
@@ -68,6 +80,11 @@ public static unsafe partial class NativeMethods
     public const uint FPDF_ERR_PASSWORD = 4;
     public const uint FPDF_ERR_SECURITY = 5;
     public const uint FPDF_ERR_PAGE = 6;
+
+    // Save flags (FPDF_SaveAsCopy / FPDF_SaveWithVersion)
+    public const uint FPDF_INCREMENTAL = 1;
+    public const uint FPDF_NO_INCREMENTAL = 2;
+    public const uint FPDF_REMOVE_SECURITY = 3;
 
     // Search flags
     public const uint FPDF_MATCHCASE = 1;
@@ -153,6 +170,31 @@ public static unsafe partial class NativeMethods
     [LibraryImport(Lib)] public static partial nint FPDFLink_GetAction(nint link);
     [LibraryImport(Lib)] public static partial uint FPDFAction_GetType(nint action);
     [LibraryImport(Lib)] public static partial uint FPDFAction_GetURIPath(nint document, nint action, void* buffer, uint buflen);
+
+    // ---- Document editing / save (v0.2) ----
+    [LibraryImport(Lib)] public static partial nint FPDF_CreateNewDocument();
+    /// <summary>Imports pages from srcDoc at destination index. A null pageIndices imports every page.</summary>
+    [LibraryImport(Lib)] [return: MarshalAs(UnmanagedType.Bool)] public static partial bool FPDF_ImportPagesByIndex(nint destDoc, nint srcDoc, int* pageIndices, uint length, int index);
+    [LibraryImport(Lib)] [return: MarshalAs(UnmanagedType.Bool)] public static partial bool FPDF_CopyViewerPreferences(nint destDoc, nint srcDoc);
+    /// <summary>Moves the listed pages, in the order given, to destPageIndex. Passing every index with dest 0 applies a whole permutation in one call.</summary>
+    [LibraryImport(Lib)] [return: MarshalAs(UnmanagedType.Bool)] public static partial bool FPDF_MovePages(nint document, int* pageIndices, uint length, int destPageIndex);
+    [LibraryImport(Lib)] public static partial nint FPDFPage_New(nint document, int pageIndex, double width, double height);
+    [LibraryImport(Lib)] public static partial void FPDFPage_Delete(nint document, int pageIndex);
+    [LibraryImport(Lib)] public static partial void FPDFPage_SetRotation(nint page, int rotate);
+    [LibraryImport(Lib)] [return: MarshalAs(UnmanagedType.Bool)] public static partial bool FPDFPage_GenerateContent(nint page);
+    [LibraryImport(Lib)] public static partial void FPDFPage_InsertObject(nint page, nint pageObject);
+    [LibraryImport(Lib)] [return: MarshalAs(UnmanagedType.Bool)] public static partial bool FPDF_GetFileVersion(nint document, int* fileVersion);
+    [LibraryImport(Lib)] [return: MarshalAs(UnmanagedType.Bool)] public static partial bool FPDF_SaveAsCopy(nint document, FPDF_FILEWRITE* fileWrite, uint flags);
+    [LibraryImport(Lib)] [return: MarshalAs(UnmanagedType.Bool)] public static partial bool FPDF_SaveWithVersion(nint document, FPDF_FILEWRITE* fileWrite, uint flags, int fileVersion);
+
+    // ---- Image page objects (Combine Files turns images into pages) ----
+    [LibraryImport(Lib)] public static partial nint FPDFPageObj_NewImageObj(nint document);
+    [LibraryImport(Lib)] public static partial void FPDFPageObj_Destroy(nint pageObject);
+    [LibraryImport(Lib)] [return: MarshalAs(UnmanagedType.Bool)] public static partial bool FPDFImageObj_SetBitmap(nint* pages, int count, nint imageObject, nint bitmap);
+    [LibraryImport(Lib)] [return: MarshalAs(UnmanagedType.Bool)] public static partial bool FPDFImageObj_LoadJpegFileInline(nint* pages, int count, nint imageObject, FPDF_FILEACCESS* fileAccess);
+    [LibraryImport(Lib)] [return: MarshalAs(UnmanagedType.Bool)] public static partial bool FPDFPageObj_SetMatrix(nint pageObject, FS_MATRIX* matrix);
+    /// <summary>alpha 0 gives an opaque BGRx bitmap, 1 gives BGRA. Both are 4 bytes per pixel.</summary>
+    [LibraryImport(Lib)] public static partial nint FPDFBitmap_Create(int width, int height, int alpha);
 
     /// <summary>Reads a UTF-16LE out-buffer using pdfium's "call with NULL to get the byte length" convention.</summary>
     public static string ReadUtf16(Func<nint, uint, uint> call)

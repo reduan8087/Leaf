@@ -1,4 +1,4 @@
-namespace Leaf.Pdfium;
+﻿namespace Leaf.Pdfium;
 
 public enum PdfError
 {
@@ -8,6 +8,9 @@ public enum PdfError
     Password = 4,
     Security = 5,
     Page = 6,
+
+    /// <summary>Writing a document failed. Deliberately outside 1..6: those mirror FPDF_ERR_* and are cast straight from FPDF_GetLastError.</summary>
+    Write = 100,
 }
 
 /// <summary>Any failure reported by the engine. Never lets a bad PDF crash the process.</summary>
