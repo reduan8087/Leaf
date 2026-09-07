@@ -1,9 +1,9 @@
-; Leaf installer (Inno Setup 6). Build with scripts/make-installer.ps1 or:
+﻿; Leaf installer (Inno Setup 6). Build with scripts/make-installer.ps1 or:
 ;   ISCC.exe installer\Leaf.iss /DPublishDir=..\artifacts\publish /DAppVersion=0.1.0
 ; Per-user by default (no admin), self-contained payload (no .NET / Windows App Runtime prerequisites).
 
 #ifndef AppVersion
-  #define AppVersion "0.1.0"
+  #define AppVersion "0.2.0"
 #endif
 #ifndef PublishDir
   #define PublishDir "..\artifacts\publish"
@@ -72,6 +72,15 @@ Root: HKA; Subkey: "Software\Classes\Applications\{#AppExe}"; ValueType: string;
 Root: HKA; Subkey: "Software\Classes\Applications\{#AppExe}"; ValueType: string; ValueName: "AppUserModelID"; ValueData: "{#AppName}"
 Root: HKA; Subkey: "Software\Classes\Applications\{#AppExe}\DefaultIcon"; ValueType: string; ValueName: ""; ValueData: "{app}\{#AppExe},0"
 Root: HKA; Subkey: "Software\Classes\Applications\{#AppExe}\SupportedTypes"; ValueType: string; ValueName: ".pdf"; ValueData: ""
+; Images are accepted as Combine Files inputs only: listed as supported types so Leaf appears under
+; "Open with", but deliberately not in OpenWithProgids or Capabilities -- Leaf is not an image viewer.
+Root: HKA; Subkey: "Software\Classes\Applications\{#AppExe}\SupportedTypes"; ValueType: string; ValueName: ".jpg"; ValueData: ""
+Root: HKA; Subkey: "Software\Classes\Applications\{#AppExe}\SupportedTypes"; ValueType: string; ValueName: ".jpeg"; ValueData: ""
+Root: HKA; Subkey: "Software\Classes\Applications\{#AppExe}\SupportedTypes"; ValueType: string; ValueName: ".png"; ValueData: ""
+Root: HKA; Subkey: "Software\Classes\Applications\{#AppExe}\SupportedTypes"; ValueType: string; ValueName: ".bmp"; ValueData: ""
+Root: HKA; Subkey: "Software\Classes\Applications\{#AppExe}\SupportedTypes"; ValueType: string; ValueName: ".tif"; ValueData: ""
+Root: HKA; Subkey: "Software\Classes\Applications\{#AppExe}\SupportedTypes"; ValueType: string; ValueName: ".tiff"; ValueData: ""
+Root: HKA; Subkey: "Software\Classes\Applications\{#AppExe}\SupportedTypes"; ValueType: string; ValueName: ".webp"; ValueData: ""
 Root: HKA; Subkey: "Software\Classes\Applications\{#AppExe}\shell\open\command"; ValueType: string; ValueName: ""; ValueData: """{app}\{#AppExe}"" ""%1"""
 ; ---- Default Programs / Settings > Default apps ----
 Root: HKA; Subkey: "Software\{#AppName}"; Flags: uninsdeletekeyifempty

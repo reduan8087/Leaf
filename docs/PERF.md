@@ -1,7 +1,12 @@
-# Performance log
+﻿# Performance log
 
-Machine: i7-11800H, 16 GB, Windows 11 25H2, laptop panel 1920x1200 @125 %. Measured with `scripts/measure-perf.ps1`
-on the Release Native AOT publish unless noted. "Private WS" is Task Manager's *Memory* column.
+Machine: i7-11800H, 16 GB, Windows 11 25H2. Measured with `scripts/measure-perf.ps1` on the Release Native AOT
+publish unless noted. "Private WS" is Task Manager's *Memory* column.
+
+**Display matters more than anything else in this file.** Tiles are device pixels, so memory scales with the
+panel. The v0.1 numbers were taken on a 1920x1200 @125 % panel (1536x960 DIP); from v0.2 the machine drives a
+3072x1920 @200 % panel (1536x960 DIP, but **2.56x the pixels** for the same layout). Compare v0.2 numbers with
+v0.2 numbers.
 
 ## 2026-09-04 — MVP v0.1 (commit after viewer + find + selection)
 
@@ -45,6 +50,48 @@ Tile cache budget is now clamp(2 × viewport bytes, 32 MiB, 64 MiB) and prefetch
 The idle increase is the retained CPU copies of visible + prefetched tiles; the v0.2 lever is GPU-only tiles
 (VirtualSurfaceImageSource + Direct2D), which would remove the CPU copies without reintroducing disposable objects.
 
+## 2026-09-08 — v0.2.0 (menu, page editing, view modes, panels)
+
+Document: generated 60-page text PDF (214 KB), `artifacts/sample/long60.pdf` from `scripts/make-samples.ps1`.
+5 warm runs, median. **New display: 3072x1920 @200 %**, so these are not comparable with the v0.1 rows above.
+
+| Metric | v0.2.0 | Budget |
+|---|---|---|
+| Time to window (warm, median) | 274 ms | <= 500 ms |
+| Time to first frame | ~500 ms | — |
+| Time to first painted page | ~555 ms | <= 1,000 ms |
+| Working set, document open, idle | 215 MB | — |
+| Private working set (Task Manager), idle | 135–149 MB | <= 150 MB |
+| Private bytes (commit), idle | ~170 MB | — |
+| Working set after scrolling all 60 pages twice | 222–269 MB, settling ~240 MB | <= 250 MB |
+| Publish folder without the PDB | 73.8 MB | <= 80 MB |
+| Installer | 19.2 MB | <= 40 MB |
+
+Everything is inside budget except the transient peak while scrolling, which touches 269 MB against a 250 MB
+budget on a panel with 2.56x the pixels the budget was set on. At rest after scrolling it is ~240 MB.
+
+### A pre-existing memory runaway, found and fixed
+
+Scrolling a 60-page document at this DPI drove the working set to **2.8 GB and private bytes to 21.9 GB**.
+Verified against an untouched v0.1.2 build on the same machine and document: it does the same, so this was
+present since v0.1 and simply never showed up on the 125 % panel, where the same layout renders 2.56x fewer
+pixels and the budget was comfortably met.
+
+Cause: a retired tile is a tiny managed object in front of a multi-megabyte native buffer. `TileCache` evicts
+correctly and `GC.RemoveMemoryPressure` keeps the accounting balanced, but nothing about dropping the last
+managed reference makes the GC want to run, so the native buffers accumulated until something else forced a
+collection. Fix: `ViewerControl.Retire` counts retired bytes and asks for a non-blocking, non-compacting gen2
+collection every 96 MB.
+
+| Same soak, same document, same zoom (1.82–1.83) | Peak working set | Peak private bytes |
+|---|---|---|
+| v0.1.2 baseline | 2,802 MB | 21,892 MB |
+| v0.2.0 before the fix | 6,640 MB | 23,939 MB |
+| v0.2.0 with the fix | 269 MB | 221 MB |
+
+Note for future measurements: the same runaway appears in **Debug** builds regardless of this fix (Debug tile
+handling differs), so memory must always be measured on the Release AOT publish, as the `leaf-perf` skill says.
+
 ## Budgets (revised from measurements; enforce with /leaf-perf)
 | Metric | Budget |
 |---|---|
@@ -54,7 +101,10 @@ The idle increase is the retained CPU copies of visible + prefetched tiles; the 
 | Working set after scrolling a 60-page document | <= 250 MB |
 | Installer | <= 40 MB |
 
-## Known levers for v0.2
-- Startup: defer toolbar/flyout construction, lazy `ViewerControl` XAML, skip `DisplayArea` query when a saved window size exists.
-- Memory: SoftwareBitmapSource keeps a GPU copy; a VirtualSurfaceImageSource + Direct2D upgrade would drop the CPU-side tile budget.
+## Known levers for v0.3
+- Memory: the GC nudge is a workaround, not a cure. GPU-only tiles (VirtualSurfaceImageSource + Direct2D) would
+  remove the CPU-side copy entirely and make the whole question go away.
+- Startup: defer toolbar/flyout construction and lazy `ViewerControl` XAML. (The `DisplayArea` query is already
+  skipped when a saved window rectangle exists, as of v0.2.)
+- Memory: each tile costs a CPU-side `WriteableBitmap` plus its GPU surface; a VirtualSurfaceImageSource + Direct2D upgrade would drop the CPU-side copy entirely.
 - First page on image-heavy PDFs: render the 256 px placeholder first (done), then consider progressive tile rendering.

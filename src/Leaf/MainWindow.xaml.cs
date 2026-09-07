@@ -407,8 +407,11 @@ public sealed partial class MainWindow : Window
             TextWrapping = TextWrapping.Wrap,
             Text = $"Leaf {typeof(MainWindow).Assembly.GetName().Version?.ToString(3) ?? "0.2"}\n\nA light, fast PDF reader for Windows.\n\n" +
                    "Rendering: PDFium (Apache License 2.0)\nUI: Windows App SDK / WinUI 3\nRuntime: .NET (Native AOT)\n\n" +
-                   "Files: Ctrl+O open, Ctrl+W close tab.\n" +
-                   "Reading: Ctrl+F find, F3 next, Ctrl+G go to page, Ctrl+wheel zoom, Ctrl+0 fit width, Ctrl+A select page, Ctrl+C copy.\n" +
+                   "Files: Ctrl+O open, Ctrl+S save, Ctrl+Shift+S save as, Ctrl+W close tab.\n" +
+                   "Edit: Ctrl+Shift+M combine files, Ctrl+Shift+O organize pages.\n" +
+                   "Reading: Ctrl+F find, F3 next, Ctrl+G go to page, Ctrl+A select page, Ctrl+C copy, F4 side panel.\n" +
+                   "Zoom: Ctrl+wheel, Ctrl+0 fit width, Ctrl+1 actual size, Ctrl+2 fit page, Ctrl+3 fit height.\n" +
+                   "Layout: Ctrl+Shift+1/2/3 one page, two pages, grid; Ctrl+Shift+E continuous scrolling.\n" +
                    "View: F11 or Ctrl+L full screen, Esc to leave, Ctrl+Shift+R / Ctrl+Shift+L rotate.",
         };
         var dialog = new ContentDialog

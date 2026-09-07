@@ -20,6 +20,9 @@ public sealed partial class ViewerControl : UserControl, IDisposable
     private const double MaxZoom = 8.0;
     private const double PtToDip = 96.0 / 72.0;
     private const int ThumbnailWidthPx = 256;
+
+    /// <summary>How much retired tile memory is worth asking the GC to reclaim. Roughly two screenfuls.</summary>
+    private const long CollectAfterRetiredBytes = 96L << 20;
     private static bool s_firstPageStamped;
 
     private readonly TileCache _cache = new();
@@ -40,6 +43,9 @@ public sealed partial class ViewerControl : UserControl, IDisposable
     private double _rasterizationScale = 1.0;
     private bool _disposed;
     private bool _suppressPageBox;
+
+    /// <summary>Tile bytes retired since a collection was last asked for.</summary>
+    private long _retiredBytes;
 
     public ViewerControl()
     {
@@ -401,6 +407,17 @@ public sealed partial class ViewerControl : UserControl, IDisposable
             }
 
             GC.RemoveMemoryPressure(entry.Bytes);
+            _retiredBytes += entry.Bytes;
+        }
+
+        // A retired tile is a tiny managed object in front of a megabytes-large native buffer, so letting go of
+        // it gives the GC no reason to run. Scrolling a long document at a high DPI retires hundreds of megabytes
+        // a second, and unprompted the process grows into the gigabytes before a collection happens by itself.
+        // Non-blocking and non-compacting, so this does not cause a visible hitch.
+        if (_retiredBytes >= CollectAfterRetiredBytes)
+        {
+            _retiredBytes = 0;
+            GC.Collect(2, GCCollectionMode.Optimized, blocking: false, compacting: false);
         }
     }
 

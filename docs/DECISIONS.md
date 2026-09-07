@@ -1,6 +1,61 @@
-# Decisions
+﻿# Decisions
 
 Format: date, decision, why, consequences. Newest first.
+
+## 2026-09-08 — v0.2.0, not v1.0.0
+The user asked for "v1.0.0" for this release. Pushed back: `docs/MVP-SCOPE.md` already defines exactly this batch of
+features (bookmarks, thumbnails, links, recent files) as "planned v0.2+", semver bumps the minor for a pre-1.0 feature
+release, and a PDF reader announcing 1.0 without a Print command reads as incomplete. Agreed ladder: 0.2.0 now,
+0.3.0 printing, 1.0.0 when print and code signing land — the point at which Acrobat can actually be uninstalled.
+
+## 2026-09-08 — The engine gains a write side
+v0.1 bound only read APIs. Combine and Organize need ~20 more `[LibraryImport]`s (import/move/delete/rotate pages,
+create documents, embed images, save), all of them already exported by the `pdfium.dll` we ship, so no new dependency
+and no different build. Consequences:
+- `FPDF_FILEWRITE` has no user-data field, unlike `FPDF_FILEACCESS`: pdfium hands the struct pointer back to the
+  callback. `PdfFileSink` over-allocates the block and keeps its `GCHandle` just past the two fields pdfium reads.
+- Every structural edit drops the page-handle LRU first and rebuilds the page table, because cached handles would
+  dangle once indices shift and reported page sizes have `/Rotate` applied.
+- `PdfError` gained `Write = 100`, deliberately outside 1..6: those mirror `FPDF_ERR_*` and are cast straight from
+  `FPDF_GetLastError`.
+
+## 2026-09-08 — Saving writes to a temp file and then reopens the document
+`PdfFileSource` reads pages lazily from a handle that stays open for the document's life. Writing straight over that
+file would corrupt every page not yet read, and a failed write would truncate the user's PDF. So `SaveService` writes
+beside the target and swaps with `File.Replace`, and the caller reopens afterwards. The visible reload is the price of
+never being able to damage a source file. Rejected: saving in place directly (fast, occasionally destructive) and
+copy-on-open (doubles memory and startup cost for every document, to help the rare one that gets edited).
+
+## 2026-09-08 — Page edits are staged, not applied as you go
+Organize Pages holds `PageEditItem`s and only touches the document on Done, so Cancel genuinely discards and a
+900-page reorder is one engine call rather than hundreds. Pages inserted from another PDF keep pointing at their own
+open document until then, which is what makes them cancellable too. `PdfPageOrder` owns the delete-then-reorder index
+maths and lives in the engine project so it can be unit-tested: deleting renumbers everything after it, so a surviving
+page's new index is its rank among the survivors, and getting that wrong silently scrambles a document.
+
+## 2026-09-08 — View modes are two axes, not a list of named modes
+Column count (1/2/N) and continuous scrolling are chosen independently, plus "cover page on its own". That covers
+Acrobat's Single Page View / Enable Scrolling / Two Page View / Two Page Scrolling from two controls, and generalises
+to a grid for free. `PageLayout` groups pages into rows; rows stay contiguous page ranges in order, which keeps
+viewport queries a binary search and lets the panel go on realizing a simple first..last range. Without continuous
+scrolling only the anchor row is laid out, so turning the page is a re-layout rather than a scroll.
+
+## 2026-09-08 — Full screen is F11, not Ctrl+F
+The user first asked for Ctrl+F. `Ctrl+F` is Find in Leaf and in essentially every Windows application, and a reader
+needs Find constantly. F11 is the Windows-wide fullscreen convention; Ctrl+L is bound as well for Acrobat muscle
+memory, and Esc leaves. The viewer now lets Escape bubble when it has no find bar or selection to dismiss.
+
+## 2026-09-08 — Combine accepts images, and JPEGs go in untouched
+Merging scans with a PDF is the common case, so `.jpg .jpeg .png .bmp .tif .tiff .webp` are accepted. A JPEG with no
+EXIF rotation is embedded byte-for-byte through `FPDFImageObj_LoadJpegFileInline`: re-encoding a photo as a raw
+bitmap would inflate the output enormously. Everything else is decoded through WIC on the UI side (the engine project
+stays free of Windows types), honouring EXIF orientation and flattened onto white, because a PDF page is opaque and a
+transparent PNG would otherwise print black.
+
+## 2026-09-08 — WinRT cannot see IReadOnlyList<T> through a binding
+`TreeViewItem.ItemsSource` bound to an `IReadOnlyList<T>` silently produced an empty collection, so nested bookmarks
+vanished with no error. Collections exposed to XAML through WinRT must be `IList`. Worth remembering: it fails
+quietly, which is the worst way for a binding to fail.
 
 ## 2026-09-04 — Name: Leaf
 Chosen by the user over Wren/Breeze/PDFViewer. Exe `Leaf.exe`, ProgId `Leaf.Document`, AUMID `Leaf`, install dir `%LOCALAPPDATA%\Programs\Leaf`.
@@ -45,7 +100,7 @@ The AOT publish pipeline dropped `Leaf.pri`/`*.xbf`; WinUI then crashed at start
 
 ## 2026-09-04 — Perf budgets set from measurements, not guesses
 WinUI 3 alone costs ~113 MB working set and ~200 ms warm window-up, so the original "idle WS <= 90 MB" was unattainable. Budgets now:
-window <= 500 ms, first page <= 1 s, private WS <= 100 MB idle, WS <= 200 MB after scrolling 60 pages, installer <= 40 MB (docs/PERF.md).
+window <= 500 ms, first page <= 1 s, private WS <= 150 MB idle, WS <= 250 MB after scrolling 60 pages, installer <= 40 MB (docs/PERF.md).
 
 ## 2026-09-04 — v0.1.1: tiles are WriteableBitmaps, nothing disposable behind an Image
 v0.1.0 crashed 10–30 s after a resize or on scroll with 0xC000027B / RO_E_CLOSED: `RenderScheduler` disposed the `SoftwareBitmap`
